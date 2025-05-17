@@ -34,6 +34,7 @@
       color: white;
       margin: 1rem 0;
       width: 200px;
+      font-family: 'Digital-7 Mono', monospace;
     }
 
     #frequency-input {
@@ -98,26 +99,22 @@
   </style>
 </head>
 <body>
-  <!-- Écran d'accueil -->
   <div id="login-screen">
     <h1>Entrez votre pseudo</h1>
     <input type="text" id="pseudo-input" placeholder="Votre pseudo" />
     <button id="enter-button">Entrer</button>
   </div>
 
-  <!-- Écran radio -->
   <div id="radio-screen" style="display: none;">
-    <div id="main-content">
-      <input type="text" id="frequency-input" maxlength="6" placeholder="000.00" />
-      <button id="join-button">Rejoindre</button>
-      <div class="buttons">
-        <button id="mute-button">
-          <img src="https://img.icons8.com/ios-filled/50/ffffff/headset.png" alt="Mute" />
-        </button>
-        <button id="mic-button">
-          <img src="https://img.icons8.com/ios-filled/50/ffffff/microphone.png" alt="Mic" />
-        </button>
-      </div>
+    <input type="text" id="frequency-input" maxlength="6" placeholder="000.00" />
+    <button id="join-button">Rejoindre</button>
+    <div class="buttons">
+      <button id="mute-button">
+        <img src="https://img.icons8.com/ios-filled/50/ffffff/headset.png" alt="Mute" />
+      </button>
+      <button id="mic-button">
+        <img src="https://img.icons8.com/ios-filled/50/ffffff/microphone.png" alt="Mic" />
+      </button>
     </div>
     <div id="device-selectors">
       <label>Micro: <select id="input-select"></select></label>
@@ -125,39 +122,14 @@
     </div>
   </div>
 
-  <!-- Barre volume -->
   <div id="volume-bar-container">
     <div id="volume-bar"></div>
   </div>
 
-  <!-- Firebase + JS -->
-  <script type="module">
-    // === Firebase setup ===
-    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.11.0/firebase-app.js";
-    import { getDatabase } from "https://www.gstatic.com/firebasejs/10.11.0/firebase-database.js";
+  <script>
+    let localStream, peerConnections = {}, room = null, micOn = false;
+    const servers = { iceServers: [{ urls: "stun:stun.l.google.com:19302" }] };
 
-    const firebaseConfig = {
-      apiKey: "TA_CLÉ_API",
-      authDomain: "TON_PROJET.firebaseapp.com",
-      projectId: "TON_PROJET",
-      storageBucket: "TON_PROJET.appspot.com",
-      messagingSenderId: "XXX",
-      appId: "XXX",
-      databaseURL: "https://TON_PROJET.firebaseio.com"
-    };
-
-    const app = initializeApp(firebaseConfig);
-    const db = getDatabase(app);
-
-    // === Variables ===
-    let pseudo = "";
-    let micStream = null;
-    let analyser = null;
-    let dataArray = null;
-    let audioContext = null;
-    let micOn = false;
-
-    // === DOM Elements ===
     const pseudoInput = document.getElementById("pseudo-input");
     const enterButton = document.getElementById("enter-button");
     const loginScreen = document.getElementById("login-screen");
@@ -170,109 +142,77 @@
     const outputSelect = document.getElementById("output-select");
     const volumeBar = document.getElementById("volume-bar");
 
-    // === Entrée pseudo ===
     enterButton.onclick = () => {
-      pseudo = pseudoInput.value.trim();
-      if (pseudo) {
+      if (pseudoInput.value.trim()) {
         loginScreen.style.display = "none";
         radioScreen.style.display = "block";
       }
     };
 
-    // === Format automatique de la fréquence ===
     freqInput.addEventListener("input", (e) => {
       let val = e.target.value.replace(/[^\d]/g, "");
       if (val.length > 3) val = val.slice(0, 3) + '.' + val.slice(3, 5);
       e.target.value = val.slice(0, 6);
     });
 
-    // === Charger les périphériques ===
-    async function loadDevices() {
-      const devices = await navigator.mediaDevices.enumerateDevices();
-      inputSelect.innerHTML = "";
-      outputSelect.innerHTML = "";
+    async function getMediaStream() {
+      localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      return localStream;
+    }
 
+    async function joinRoom(freq) {
+      if (!localStream) await getMediaStream();
+      room = freq;
+      // Simule une salle WebRTC en mode peer-to-peer (simplifié, non scalable)
+    }
+
+    micButton.onclick = async () => {
+      if (!micOn) {
+        await getMediaStream();
+        micOn = true;
+        micButton.style.opacity = 1;
+        startVolumeMeter();
+      } else {
+        localStream.getTracks().forEach(track => track.stop());
+        micOn = false;
+        micButton.style.opacity = 0.5;
+        volumeBar.style.height = '0';
+      }
+    };
+
+    joinButton.onclick = async () => {
+      const freq = freqInput.value;
+      if (!freq) return;
+      await joinRoom(freq);
+    };
+
+    function startVolumeMeter() {
+      const context = new (window.AudioContext || window.webkitAudioContext)();
+      const analyser = context.createAnalyser();
+      const micSource = context.createMediaStreamSource(localStream);
+      micSource.connect(analyser);
+      analyser.fftSize = 256;
+      const data = new Uint8Array(analyser.frequencyBinCount);
+
+      function draw() {
+        requestAnimationFrame(draw);
+        analyser.getByteFrequencyData(data);
+        const avg = data.reduce((a, b) => a + b) / data.length;
+        const height = Math.min(avg * 1.5, 100);
+        volumeBar.style.height = `${height}%`;
+      }
+      draw();
+    }
+
+    navigator.mediaDevices.enumerateDevices().then(devices => {
       devices.forEach(device => {
         const option = document.createElement("option");
         option.value = device.deviceId;
-        option.text = device.label || `${device.kind} ${device.deviceId}`;
-        if (device.kind === "audioinput") {
-          inputSelect.appendChild(option);
-        } else if (device.kind === "audiooutput") {
-          outputSelect.appendChild(option);
-        }
+        option.text = device.label || `${device.kind}`;
+        if (device.kind === "audioinput") inputSelect.appendChild(option);
+        if (device.kind === "audiooutput") outputSelect.appendChild(option);
       });
-    }
-
-    navigator.mediaDevices.getUserMedia({ audio: true }).then(() => {
-      loadDevices();
     });
-
-    // === Joindre une fréquence ===
-    joinButton.onclick = async () => {
-      if (!micOn) {
-        await toggleMic(); // activer micro si pas encore
-      }
-      startVolumeMeter();
-    };
-
-    // === Volume mètre ===
-    function startVolumeMeter() {
-      if (!micStream) return;
-
-      audioContext = new (window.AudioContext || window.webkitAudioContext)();
-      const source = audioContext.createMediaStreamSource(micStream);
-      analyser = audioContext.createAnalyser();
-      analyser.fftSize = 256;
-      const bufferLength = analyser.frequencyBinCount;
-      dataArray = new Uint8Array(bufferLength);
-
-      source.connect(analyser);
-      updateVolume();
-    }
-
-    function updateVolume() {
-      requestAnimationFrame(updateVolume);
-      analyser.getByteFrequencyData(dataArray);
-      let sum = 0;
-      for (let i = 0; i < dataArray.length; i++) {
-        sum += dataArray[i];
-      }
-      const average = sum / dataArray.length;
-      const height = Math.min(average * 1.5, 100);
-      volumeBar.style.height = `${height}%`;
-    }
-
-    // === Toggle micro ===
-    async function toggleMic() {
-      if (!micOn) {
-        const constraints = {
-          audio: {
-            deviceId: inputSelect.value ? { exact: inputSelect.value } : undefined
-          }
-        };
-        micStream = await navigator.mediaDevices.getUserMedia(constraints);
-        micOn = true;
-        micButton.style.opacity = 1;
-        console.log("Micro activé");
-      } else {
-        micStream.getTracks().forEach(track => track.stop());
-        micOn = false;
-        micButton.style.opacity = 0.5;
-        volumeBar.style.height = "0";
-        console.log("Micro désactivé");
-      }
-    }
-
-    micButton.onclick = toggleMic;
-
-    // === Toggle son ===
-    let muted = false;
-    muteButton.onclick = () => {
-      muted = !muted;
-      muteButton.style.opacity = muted ? 0.5 : 1;
-      console.log(muted ? "Son coupé" : "Son actif");
-    };
   </script>
 </body>
 </html>
