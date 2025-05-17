@@ -5,6 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Radio Fréquence</title>
   <link href="https://fonts.cdnfonts.com/css/digital-7-mono" rel="stylesheet">
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
   <style>
     body {
       margin: 0;
@@ -19,11 +21,9 @@
       position: relative;
       overflow: hidden;
     }
-
     #login-screen, #radio-screen {
       text-align: center;
     }
-
     #pseudo-input, #frequency-input {
       font-size: 2rem;
       padding: 1rem;
@@ -36,18 +36,15 @@
       width: 200px;
       font-family: 'Digital-7 Mono', monospace;
     }
-
     #frequency-input {
       border-radius: 0;
     }
-
     .buttons {
       display: flex;
       justify-content: center;
       gap: 20px;
       margin-top: 10px;
     }
-
     .buttons button, #join-button {
       background: none;
       border: 2px solid white;
@@ -57,27 +54,18 @@
       cursor: pointer;
       font-family: 'Digital-7 Mono', monospace;
     }
-
     .buttons img {
       width: 40px;
       height: 40px;
     }
-
     #device-selectors {
       position: fixed;
       bottom: 20px;
       display: flex;
       gap: 20px;
     }
-
-    label {
-      font-size: 1rem;
-    }
-
-    select {
-      font-size: 1rem;
-    }
-
+    label { font-size: 1rem; }
+    select { font-size: 1rem; }
     #volume-bar-container {
       position: fixed;
       top: 0;
@@ -89,7 +77,6 @@
       align-items: flex-end;
       justify-content: center;
     }
-
     #volume-bar {
       width: 100%;
       background-color: limegreen;
@@ -127,8 +114,22 @@
   </div>
 
   <script>
-    let localStream, peerConnections = {}, room = null, micOn = false;
-    const servers = { iceServers: [{ urls: "stun:stun.l.google.com:19302" }] };
+    const firebaseConfig = {
+      apiKey: "AIzaSyABEP_KAW9R4dYpnDS9BANn6vcQCICxzrU",
+      authDomain: "kenzomc-ad1c2.firebaseapp.com",
+      databaseURL: "https://kenzomc-ad1c2-default-rtdb.firebaseio.com",
+      projectId: "kenzomc-ad1c2",
+      storageBucket: "kenzomc-ad1c2.firebasestorage.app",
+      messagingSenderId: "459457032331",
+      appId: "1:459457032331:web:af7e0d8c958a807ce2648e",
+      measurementId: "G-341YD1GPC5"
+    };
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.database();
+
+    let localStream, peerConnections = {}, roomId = null;
+    let pseudo = "", micOn = false;
+    const configuration = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] };
 
     const pseudoInput = document.getElementById("pseudo-input");
     const enterButton = document.getElementById("enter-button");
@@ -144,6 +145,7 @@
 
     enterButton.onclick = () => {
       if (pseudoInput.value.trim()) {
+        pseudo = pseudoInput.value.trim();
         loginScreen.style.display = "none";
         radioScreen.style.display = "block";
       }
@@ -155,20 +157,9 @@
       e.target.value = val.slice(0, 6);
     });
 
-    async function getMediaStream() {
-      localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      return localStream;
-    }
-
-    async function joinRoom(freq) {
-      if (!localStream) await getMediaStream();
-      room = freq;
-      // Simule une salle WebRTC en mode peer-to-peer (simplifié, non scalable)
-    }
-
     micButton.onclick = async () => {
       if (!micOn) {
-        await getMediaStream();
+        await getLocalStream();
         micOn = true;
         micButton.style.opacity = 1;
         startVolumeMeter();
@@ -180,10 +171,84 @@
       }
     };
 
+    async function getLocalStream() {
+      localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    }
+
+    async function startCall(peerId) {
+      const pc = new RTCPeerConnection(configuration);
+      peerConnections[peerId] = pc;
+      localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
+      const offer = await pc.createOffer();
+      await pc.setLocalDescription(offer);
+      db.ref(`${roomId}/${peerId}/offers/${pseudo}`).set({ sdp: offer.sdp });
+
+      pc.onicecandidate = (e) => {
+        if (e.candidate) {
+          db.ref(`${roomId}/${peerId}/candidates/${pseudo}`).push(e.candidate);
+        }
+      };
+
+      pc.ontrack = (e) => {
+        const audio = new Audio();
+        audio.srcObject = e.streams[0];
+        audio.play();
+      };
+    }
+
+    async function joinRoom(freq) {
+      roomId = `freq-${freq.replace('.', '')}`;
+      db.ref(roomId).on('value', snapshot => {
+        const peers = snapshot.val() || {};
+        for (const peerId in peers) {
+          if (peerId !== pseudo && !peerConnections[peerId]) {
+            connectToPeer(peerId);
+          }
+        }
+      });
+    }
+
+    async function connectToPeer(peerId) {
+      const pc = new RTCPeerConnection(configuration);
+      peerConnections[peerId] = pc;
+      localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
+
+      db.ref(`${roomId}/${pseudo}/offers/${peerId}`).on('value', async snapshot => {
+        const offer = snapshot.val();
+        if (offer && !pc.currentRemoteDescription) {
+          await pc.setRemoteDescription(new RTCSessionDescription({ type: 'offer', sdp: offer.sdp }));
+          const answer = await pc.createAnswer();
+          await pc.setLocalDescription(answer);
+          db.ref(`${roomId}/${pseudo}/answers/${peerId}`).set({ sdp: answer.sdp });
+        }
+      });
+
+      db.ref(`${roomId}/${peerId}/candidates`).on('child_added', snapshot => {
+        const candidate = snapshot.val();
+        pc.addIceCandidate(new RTCIceCandidate(candidate));
+      });
+
+      pc.onicecandidate = e => {
+        if (e.candidate) {
+          db.ref(`${roomId}/${pseudo}/candidates/${peerId}`).push(e.candidate);
+        }
+      };
+
+      pc.ontrack = e => {
+        const audio = new Audio();
+        audio.srcObject = e.streams[0];
+        audio.play();
+      };
+    }
+
     joinButton.onclick = async () => {
       const freq = freqInput.value;
       if (!freq) return;
+      if (!micOn) await micButton.onclick();
       await joinRoom(freq);
+      for (const peerId in (await db.ref(roomId).get()).val() || {}) {
+        if (peerId !== pseudo) startCall(peerId);
+      }
     };
 
     function startVolumeMeter() {
