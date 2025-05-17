@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Fréquences actives</title>
+  <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
+  <link href="https://fonts.cdnfonts.com/css/digital-7-mono" rel="stylesheet">
+  <style>
+    body {
+      background-color: #222;
+      color: white;
+      font-family: 'Digital-7 Mono', monospace;
+      margin: 0;
+      padding: 20px;
+    }
+    .freq {
+      border: 2px solid black;
+      padding: 10px;
+      margin-bottom: 10px;
+      font-weight: bold;
+      cursor: pointer;
+      background-color: #333;
+    }
+    .motd {
+      font-weight: normal;
+      color: #ccc;
+      margin-top: 5px;
+    }
+    .user-list {
+      margin-top: 10px;
+      padding-left: 20px;
+      font-size: 0.9em;
+    }
+  </style>
+</head>
+<body>
+  <h2>Fréquences actives :</h2>
+  <div id="frequencies"></div>
+
+  <script>
+    const firebaseConfig = {
+      apiKey: "AIzaSyABEP_KAW9R4dYpnDS9BANn6vcQCICxzrU",
+      authDomain: "kenzomc-ad1c2.firebaseapp.com",
+      databaseURL: "https://kenzomc-ad1c2-default-rtdb.firebaseio.com",
+      projectId: "kenzomc-ad1c2",
+      storageBucket: "kenzomc-ad1c2.appspot.com",
+      messagingSenderId: "459457032331",
+      appId: "1:459457032331:web:af7e0d8c958a807ce2648e",
+      measurementId: "G-341YD1GPC5"
+    };
+
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.database();
+    const freqContainer = document.getElementById('frequencies');
+
+    db.ref("frequencies").on("value", (snapshot) => {
+      freqContainer.innerHTML = "";
+      const freqs = snapshot.val();
+      if (!freqs) return;
+
+      Object.entries(freqs).forEach(([freqId, data]) => {
+        if (!data.users) return;
+
+        const users = Object.values(data.users || {});
+        if (users.length === 0) return;
+
+        const freqDiv = document.createElement("div");
+        freqDiv.className = "freq";
+        freqDiv.innerText = `Fréquence: ${freqId.replace("freq-", "").replace(/(\d{3})(\d+)/, "$1.$2")}`;
+        
+        const motd = document.createElement("div");
+        motd.className = "motd";
+        motd.innerText = `MOTD: ${data.motd || "Aucune"}`;
+        freqDiv.appendChild(motd);
+
+        const userList = document.createElement("div");
+        userList.className = "user-list";
+        userList.style.display = "none";
+
+        users.forEach(u => {
+          const userDiv = document.createElement("div");
+          userDiv.textContent = `• ${u.name}`;
+          userList.appendChild(userDiv);
+        });
+
+        freqDiv.addEventListener("click", () => {
+          userList.style.display = userList.style.display === "none" ? "block" : "none";
+        });
+
+        freqDiv.appendChild(userList);
+        freqContainer.appendChild(freqDiv);
+      });
+    });
+  </script>
+</body>
+</html>
