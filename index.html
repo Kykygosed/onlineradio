@@ -31,8 +31,16 @@
     button {
       margin: 10px;
       font-size: 1.2em;
-      padding: 10px;
+      padding: 10px 20px;
       cursor: pointer;
+      border: none;
+      background-color: #444;
+      color: white;
+      font-family: 'Digital-7 Mono', monospace;
+      transition: background-color 0.3s;
+    }
+    button:hover {
+      background-color: #666;
     }
     #volumeBar {
       position: fixed;
@@ -68,10 +76,11 @@
     <input type="text" id="frequencyInput" maxlength="6" placeholder="000.00">
     <br>
     <input type="text" id="motdInput" placeholder="Message de la fréquence (MOTD)">
+    <button id="setMotdBtn">Set MOTD</button>
     <br>
     <button id="joinBtn">Rejoindre</button>
-    <button id="muteBtn">🎧</button>
-    <button id="micBtn">🎤</button>
+    <button id="muteBtn">🎧 Casque</button>
+    <button id="micBtn">🎤 Micro</button>
   </div>
   <div id="volumeBar">
     <div id="volumeLevel"></div>
@@ -104,6 +113,7 @@
     const joinBtn = document.getElementById('joinBtn');
     const micBtn = document.getElementById('micBtn');
     const muteBtn = document.getElementById('muteBtn');
+    const setMotdBtn = document.getElementById('setMotdBtn');
     const volumeLevel = document.getElementById('volumeLevel');
 
     freqInput.addEventListener('input', () => {
@@ -115,22 +125,28 @@
     joinBtn.addEventListener('click', async () => {
       const pseudo = pseudoInput.value;
       const freq = freqInput.value;
-      const motd = motdInput.value;
       if (!pseudo || !freq) return alert("Pseudo et fréquence obligatoires");
 
       const freqKey = 'freq-' + freq.replace('.', '');
       const userId = Date.now();
 
       const usersRef = db.ref(`frequencies/${freqKey}/users`);
-      const motdRef = db.ref(`frequencies/${freqKey}/motd`);
-
-      const snap = await usersRef.once('value');
-      if (!snap.exists()) motdRef.set(motd);
 
       usersRef.child(userId).set({ name: pseudo });
       window.addEventListener('beforeunload', () => {
         usersRef.child(userId).remove();
       });
+    });
+
+    setMotdBtn.addEventListener('click', async () => {
+      const freq = freqInput.value;
+      const motd = motdInput.value;
+      if (!freq || !motd) return alert("Entrez une fréquence et une MOTD");
+      const freqKey = 'freq-' + freq.replace('.', '');
+      const motdRef = db.ref(`frequencies/${freqKey}/motd`);
+      const usersRef = db.ref(`frequencies/${freqKey}/users`);
+      const snap = await usersRef.once('value');
+      if (!snap.exists()) motdRef.set(motd);
     });
 
     async function startMic() {
