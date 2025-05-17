@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Radio Fréquence</title>
+
+  <!-- Police Digital 7 Mono -->
+  <link href="https://fonts.cdnfonts.com/css/digital-7-mono" rel="stylesheet">
+
+  <style>
+    body {
+      margin: 0;
+      font-family: 'Digital-7 Mono', monospace;
+      background-color: #2b2b2b;
+      color: white;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      flex-direction: column;
+    }
+
+    #login-screen, #radio-screen {
+      text-align: center;
+    }
+
+    #pseudo-input, #frequency-input {
+      font-size: 2rem;
+      padding: 1rem;
+      text-align: center;
+      border: none;
+      outline: none;
+      background-color: #444;
+      color: white;
+      margin: 1rem 0;
+      width: 200px;
+    }
+
+    #frequency-input {
+      border-radius: 0;
+    }
+
+    .buttons {
+      display: flex;
+      justify-content: center;
+      gap: 20px;
+    }
+
+    .buttons button {
+      background: none;
+      border: none;
+      cursor: pointer;
+    }
+
+    .buttons img {
+      width: 40px;
+      height: 40px;
+    }
+
+    #device-selectors {
+      position: fixed;
+      bottom: 20px;
+      display: flex;
+      gap: 20px;
+    }
+
+    label {
+      font-size: 1rem;
+    }
+
+    select {
+      font-size: 1rem;
+    }
+  </style>
+</head>
+<body>
+  <!-- Écran d'accueil -->
+  <div id="login-screen">
+    <h1>Entrez votre pseudo</h1>
+    <input type="text" id="pseudo-input" placeholder="Votre pseudo" />
+    <button id="enter-button">Entrer</button>
+  </div>
+
+  <!-- Écran radio -->
+  <div id="radio-screen" style="display: none;">
+    <div id="main-content">
+      <input type="text" id="frequency-input" maxlength="6" placeholder="000.00" />
+      <div class="buttons">
+        <button id="mute-button">
+          <img src="https://img.icons8.com/ios-filled/50/ffffff/headset.png" alt="Mute" />
+        </button>
+        <button id="mic-button">
+          <img src="https://img.icons8.com/ios-filled/50/ffffff/microphone.png" alt="Mic" />
+        </button>
+      </div>
+    </div>
+    <div id="device-selectors">
+      <label>Micro: <select id="input-select"></select></label>
+      <label>Haut-parleur: <select id="output-select"></select></label>
+    </div>
+  </div>
+
+  <!-- Firebase + JS -->
+  <script type="module">
+    // === Firebase setup ===
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.11.0/firebase-app.js";
+    import { getDatabase } from "https://www.gstatic.com/firebasejs/10.11.0/firebase-database.js";
+
+    const firebaseConfig = {
+      apiKey: "TA_CLÉ_API",
+      authDomain: "TON_PROJET.firebaseapp.com",
+      projectId: "TON_PROJET",
+      storageBucket: "TON_PROJET.appspot.com",
+      messagingSenderId: "XXX",
+      appId: "XXX",
+      databaseURL: "https://TON_PROJET.firebaseio.com"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db = getDatabase(app);
+
+    // === Variables ===
+    let pseudo = "";
+
+    // === DOM Elements ===
+    const pseudoInput = document.getElementById("pseudo-input");
+    const enterButton = document.getElementById("enter-button");
+    const loginScreen = document.getElementById("login-screen");
+    const radioScreen = document.getElementById("radio-screen");
+    const freqInput = document.getElementById("frequency-input");
+
+    // === Entrée pseudo ===
+    enterButton.onclick = () => {
+      pseudo = pseudoInput.value.trim();
+      if (pseudo) {
+        loginScreen.style.display = "none";
+        radioScreen.style.display = "block";
+      }
+    };
+
+    // === Format automatique de la fréquence ===
+    freqInput.addEventListener("input", (e) => {
+      let val = e.target.value.replace(/[^\d]/g, "");
+      if (val.length > 3) val = val.slice(0, 3) + '.' + val.slice(3, 5);
+      e.target.value = val.slice(0, 6);
+    });
+
+    // === Chargement des périphériques ===
+    const inputSelect = document.getElementById("input-select");
+    const outputSelect = document.getElementById("output-select");
+
+    async function loadDevices() {
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      inputSelect.innerHTML = "";
+      outputSelect.innerHTML = "";
+
+      devices.forEach(device => {
+        const option = document.createElement("option");
+        option.value = device.deviceId;
+        option.text = device.label || `${device.kind} ${device.deviceId}`;
+        if (device.kind === "audioinput") {
+          inputSelect.appendChild(option);
+        } else if (device.kind === "audiooutput") {
+          outputSelect.appendChild(option);
+        }
+      });
+    }
+
+    navigator.mediaDevices.getUserMedia({ audio: true }).then(() => {
+      loadDevices();
+    });
+
+    // === Boutons Mute et Micro (placeholders) ===
+    const muteButton = document.getElementById("mute-button");
+    const micButton = document.getElementById("mic-button");
+
+    let muted = false;
+    let micOn = false;
+
+    muteButton.onclick = () => {
+      muted = !muted;
+      muteButton.style.opacity = muted ? 0.5 : 1;
+      console.log(muted ? "Audio désactivé" : "Audio activé");
+      // Ajoute la logique WebRTC ici plus tard
+    };
+
+    micButton.onclick = () => {
+      micOn = !micOn;
+      micButton.style.opacity = micOn ? 1 : 0.5;
+      console.log(micOn ? "Micro activé" : "Micro coupé");
+      // Ajoute la logique WebRTC ici plus tard
+    };
+  </script>
+</body>
+</html>
