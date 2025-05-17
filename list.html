@@ -1,41 +1,58 @@
 <!DOCTYPE html>
-<html>
+<html lang="fr">
 <head>
   <meta charset="UTF-8">
-  <title>Fréquences actives</title>
+  <title>Liste des Fréquences</title>
+  <link href="https://fonts.cdnfonts.com/css/digital-7-mono" rel="stylesheet">
   <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
   <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
-  <link href="https://fonts.cdnfonts.com/css/digital-7-mono" rel="stylesheet">
   <style>
     body {
+      margin: 0;
       background-color: #222;
       color: white;
       font-family: 'Digital-7 Mono', monospace;
-      margin: 0;
       padding: 20px;
     }
-    .freq {
+    .frequency {
       border: 2px solid black;
       padding: 10px;
       margin-bottom: 10px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .freq-label {
       font-weight: bold;
-      cursor: pointer;
-      background-color: #333;
+      font-size: 1.5em;
     }
     .motd {
-      font-weight: normal;
-      color: #ccc;
-      margin-top: 5px;
+      margin-left: 20px;
+      flex: 1;
+    }
+    .users-count {
+      font-weight: bold;
+      padding: 4px 8px;
+      border-radius: 4px;
+    }
+    .users-red {
+      color: red;
+    }
+    .users-orange {
+      color: orange;
+    }
+    .users-green {
+      color: limegreen;
     }
     .user-list {
-      margin-top: 10px;
-      padding-left: 20px;
+      margin-top: 5px;
+      margin-left: 20px;
       font-size: 0.9em;
     }
   </style>
 </head>
 <body>
-  <h2>Fréquences actives :</h2>
+  <h1>Fréquences Actives</h1>
   <div id="frequencies"></div>
 
   <script>
@@ -49,47 +66,66 @@
       appId: "1:459457032331:web:af7e0d8c958a807ce2648e",
       measurementId: "G-341YD1GPC5"
     };
-
     firebase.initializeApp(firebaseConfig);
     const db = firebase.database();
+
     const freqContainer = document.getElementById('frequencies');
 
-    db.ref("frequencies").on("value", (snapshot) => {
-      freqContainer.innerHTML = "";
-      const freqs = snapshot.val();
-      if (!freqs) return;
+    function getUserColor(count) {
+      if (count >= 6) return 'users-green';
+      if (count >= 3) return 'users-orange';
+      return 'users-red';
+    }
 
-      Object.entries(freqs).forEach(([freqId, data]) => {
-        if (!data.users) return;
+    db.ref('frequencies').on('value', snapshot => {
+      const data = snapshot.val() || {};
+      const freqs = [];
 
-        const users = Object.values(data.users || {});
-        if (users.length === 0) return;
+      for (const freqKey in data) {
+        const freqData = data[freqKey];
+        const users = freqData.users || {};
+        const motd = freqData.motd || '';
+        const userCount = Object.keys(users).length;
+        const userList = Object.values(users).map(u => u.name);
 
-        const freqDiv = document.createElement("div");
-        freqDiv.className = "freq";
-        freqDiv.innerText = `Fréquence: ${freqId.replace("freq-", "").replace(/(\d{3})(\d+)/, "$1.$2")}`;
-        
-        const motd = document.createElement("div");
-        motd.className = "motd";
-        motd.innerText = `MOTD: ${data.motd || "Aucune"}`;
-        freqDiv.appendChild(motd);
-
-        const userList = document.createElement("div");
-        userList.className = "user-list";
-        userList.style.display = "none";
-
-        users.forEach(u => {
-          const userDiv = document.createElement("div");
-          userDiv.textContent = `• ${u.name}`;
-          userList.appendChild(userDiv);
+        freqs.push({
+          key: freqKey,
+          motd,
+          userCount,
+          userList
         });
+      }
 
-        freqDiv.addEventListener("click", () => {
-          userList.style.display = userList.style.display === "none" ? "block" : "none";
-        });
+      freqs.sort((a, b) => b.userCount - a.userCount);
 
-        freqDiv.appendChild(userList);
-        freqContainer.appendChild(freqDiv);
+      freqContainer.innerHTML = '';
+
+      freqs.forEach(freq => {
+        const div = document.createElement('div');
+        div.className = 'frequency';
+
+        const freqLabel = document.createElement('div');
+        freqLabel.className = 'freq-label';
+        freqLabel.textContent = freq.key.replace('freq-', '').replace(/(\d{3})(\d{2})/, '$1.$2');
+
+        const motd = document.createElement('div');
+        motd.className = 'motd';
+        motd.textContent = freq.motd;
+
+        const usersCount = document.createElement('div');
+        usersCount.className = 'users-count ' + getUserColor(freq.userCount);
+        usersCount.textContent = freq.userCount + ' connecté(s)';
+
+        const usersList = document.createElement('div');
+        usersList.className = 'user-list';
+        usersList.textContent = 'Utilisateurs: ' + freq.userList.join(', ');
+
+        div.appendChild(freqLabel);
+        div.appendChild(motd);
+        div.appendChild(usersCount);
+        div.appendChild(usersList);
+
+        freqContainer.appendChild(div);
       });
     });
   </script>
