@@ -1,121 +1,86 @@
 <!DOCTYPE html>
 <html lang="fr">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Radio Fréquence</title>
+  <meta charset="UTF-8">
+  <title>Radio Numérique</title>
   <link href="https://fonts.cdnfonts.com/css/digital-7-mono" rel="stylesheet">
-  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-auth.js"></script>
   <style>
     body {
       margin: 0;
-      font-family: 'Digital-7 Mono', monospace;
-      background-color: #2b2b2b;
+      background-color: #222;
       color: white;
+      font-family: 'Digital-7 Mono', monospace;
       display: flex;
-      justify-content: center;
-      align-items: center;
-      height: 100vh;
       flex-direction: column;
-      position: relative;
-      overflow: hidden;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
     }
-    #login-screen, #radio-screen {
+    #frequencyInput {
+      font-size: 3em;
+      padding: 10px;
       text-align: center;
-    }
-    #pseudo-input, #frequency-input {
-      font-size: 2rem;
-      padding: 1rem;
-      text-align: center;
+      width: 300px;
+      font-family: 'Digital-7 Mono', monospace;
       border: none;
       outline: none;
-      background-color: #444;
-      color: white;
-      margin: 1rem 0;
-      width: 200px;
-      font-family: 'Digital-7 Mono', monospace;
     }
-    #frequency-input {
-      border-radius: 0;
-    }
-    .buttons {
-      display: flex;
-      justify-content: center;
-      gap: 20px;
-      margin-top: 10px;
-    }
-    .buttons button, #join-button {
-      background: none;
-      border: 2px solid white;
-      color: white;
-      font-size: 1rem;
-      padding: 0.5rem 1rem;
+    button {
+      margin: 10px;
+      font-size: 1.2em;
+      padding: 10px;
       cursor: pointer;
-      font-family: 'Digital-7 Mono', monospace;
     }
-    .buttons img {
-      width: 40px;
-      height: 40px;
-    }
-    #device-selectors {
+    #volumeBar {
       position: fixed;
-      bottom: 20px;
-      display: flex;
-      gap: 20px;
-    }
-    label { font-size: 1rem; }
-    select { font-size: 1rem; }
-    #volume-bar-container {
-      position: fixed;
-      top: 0;
       right: 0;
+      bottom: 50px;
       width: 20px;
-      height: 100%;
-      background-color: #1a1a1a;
-      display: flex;
-      align-items: flex-end;
-      justify-content: center;
+      height: 100px;
+      background-color: #333;
+      border: 1px solid #000;
     }
-    #volume-bar {
+    #volumeLevel {
+      background-color: green;
       width: 100%;
-      background-color: limegreen;
       height: 0;
-      transition: height 0.1s ease-out;
+    }
+    #deviceSelectors {
+      position: fixed;
+      bottom: 10px;
+      display: flex;
+      gap: 10px;
+    }
+    #listButton {
+      position: absolute;
+      top: 10px;
+      right: 10px;
     }
   </style>
 </head>
 <body>
-  <div id="login-screen">
-    <h1>Entrez votre pseudo</h1>
-    <input type="text" id="pseudo-input" placeholder="Votre pseudo" />
-    <button id="enter-button">Entrer</button>
+  <div>
+    <input type="text" id="pseudoInput" placeholder="Entrez votre pseudo">
+    <br><br>
+    <input type="text" id="frequencyInput" maxlength="6" placeholder="000.00">
+    <br>
+    <input type="text" id="motdInput" placeholder="Message de la fréquence (MOTD)">
+    <br>
+    <button id="joinBtn">Rejoindre</button>
+    <button id="muteBtn">🎧</button>
+    <button id="micBtn">🎤</button>
   </div>
-
-  <div id="radio-screen" style="display: none;">
-    <input type="text" id="frequency-input" maxlength="6" placeholder="000.00" />
-    <button id="join-button">Rejoindre</button>
-    <button onclick="window.location.href='list.html'" style="position: absolute; top: 10px; right: 10px;">
-  Liste
-</button>
-
-    <div class="buttons">
-      <button id="mute-button">
-        <img src="https://img.icons8.com/ios-filled/50/ffffff/headset.png" alt="Mute" />
-      </button>
-      <button id="mic-button">
-        <img src="https://img.icons8.com/ios-filled/50/ffffff/microphone.png" alt="Mic" />
-      </button>
-    </div>
-    <div id="device-selectors">
-      <label>Micro: <select id="input-select"></select></label>
-      <label>Haut-parleur: <select id="output-select"></select></label>
-    </div>
+  <div id="volumeBar">
+    <div id="volumeLevel"></div>
   </div>
-
-  <div id="volume-bar-container">
-    <div id="volume-bar"></div>
+  <div id="deviceSelectors">
+    <select id="inputSelect"></select>
+    <select id="outputSelect"></select>
   </div>
+  <button id="listButton" onclick="window.location.href='list.html'">Liste</button>
 
   <script>
     const firebaseConfig = {
@@ -123,165 +88,93 @@
       authDomain: "kenzomc-ad1c2.firebaseapp.com",
       databaseURL: "https://kenzomc-ad1c2-default-rtdb.firebaseio.com",
       projectId: "kenzomc-ad1c2",
-      storageBucket: "kenzomc-ad1c2.firebasestorage.app",
+      storageBucket: "kenzomc-ad1c2.appspot.com",
       messagingSenderId: "459457032331",
       appId: "1:459457032331:web:af7e0d8c958a807ce2648e",
       measurementId: "G-341YD1GPC5"
     };
     firebase.initializeApp(firebaseConfig);
+
     const db = firebase.database();
+    let localStream, analyser;
 
-    let localStream, peerConnections = {}, roomId = null;
-    let pseudo = "", micOn = false;
-    const configuration = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] };
+    const pseudoInput = document.getElementById('pseudoInput');
+    const freqInput = document.getElementById('frequencyInput');
+    const motdInput = document.getElementById('motdInput');
+    const joinBtn = document.getElementById('joinBtn');
+    const micBtn = document.getElementById('micBtn');
+    const muteBtn = document.getElementById('muteBtn');
+    const volumeLevel = document.getElementById('volumeLevel');
 
-    const pseudoInput = document.getElementById("pseudo-input");
-    const enterButton = document.getElementById("enter-button");
-    const loginScreen = document.getElementById("login-screen");
-    const radioScreen = document.getElementById("radio-screen");
-    const freqInput = document.getElementById("frequency-input");
-    const joinButton = document.getElementById("join-button");
-    const micButton = document.getElementById("mic-button");
-    const muteButton = document.getElementById("mute-button");
-    const inputSelect = document.getElementById("input-select");
-    const outputSelect = document.getElementById("output-select");
-    const volumeBar = document.getElementById("volume-bar");
-
-    enterButton.onclick = () => {
-      if (pseudoInput.value.trim()) {
-        pseudo = pseudoInput.value.trim();
-        loginScreen.style.display = "none";
-        radioScreen.style.display = "block";
-      }
-    };
-
-    freqInput.addEventListener("input", (e) => {
-      let val = e.target.value.replace(/[^\d]/g, "");
-      if (val.length > 3) val = val.slice(0, 3) + '.' + val.slice(3, 5);
-      e.target.value = val.slice(0, 6);
+    freqInput.addEventListener('input', () => {
+      let v = freqInput.value.replace(/\D/g, '').slice(0, 5);
+      if (v.length > 3) v = v.slice(0, 3) + '.' + v.slice(3);
+      freqInput.value = v;
     });
 
-    micButton.onclick = async () => {
-      if (!micOn) {
-        await getLocalStream();
-        micOn = true;
-        micButton.style.opacity = 1;
-        startVolumeMeter();
-      } else {
-        localStream.getTracks().forEach(track => track.stop());
-        micOn = false;
-        micButton.style.opacity = 0.5;
-        volumeBar.style.height = '0';
-      }
-    };
-
-    async function getLocalStream() {
-      localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    }
-
-    async function startCall(peerId) {
-      const pc = new RTCPeerConnection(configuration);
-      peerConnections[peerId] = pc;
-      localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
-      const offer = await pc.createOffer();
-      await pc.setLocalDescription(offer);
-      db.ref(`${roomId}/${peerId}/offers/${pseudo}`).set({ sdp: offer.sdp });
-
-      pc.onicecandidate = (e) => {
-        if (e.candidate) {
-          db.ref(`${roomId}/${peerId}/candidates/${pseudo}`).push(e.candidate);
-        }
-      };
-
-      pc.ontrack = (e) => {
-        const audio = new Audio();
-        audio.srcObject = e.streams[0];
-        audio.play();
-      };
-    }
-
-    async function joinRoom(freq) {
-      roomId = `freq-${freq.replace('.', '')}`;
-      db.ref(roomId).on('value', snapshot => {
-        const peers = snapshot.val() || {};
-        for (const peerId in peers) {
-          if (peerId !== pseudo && !peerConnections[peerId]) {
-            connectToPeer(peerId);
-          }
-        }
-      });
-    }
-
-    async function connectToPeer(peerId) {
-      const pc = new RTCPeerConnection(configuration);
-      peerConnections[peerId] = pc;
-      localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
-
-      db.ref(`${roomId}/${pseudo}/offers/${peerId}`).on('value', async snapshot => {
-        const offer = snapshot.val();
-        if (offer && !pc.currentRemoteDescription) {
-          await pc.setRemoteDescription(new RTCSessionDescription({ type: 'offer', sdp: offer.sdp }));
-          const answer = await pc.createAnswer();
-          await pc.setLocalDescription(answer);
-          db.ref(`${roomId}/${pseudo}/answers/${peerId}`).set({ sdp: answer.sdp });
-        }
-      });
-
-      db.ref(`${roomId}/${peerId}/candidates`).on('child_added', snapshot => {
-        const candidate = snapshot.val();
-        pc.addIceCandidate(new RTCIceCandidate(candidate));
-      });
-
-      pc.onicecandidate = e => {
-        if (e.candidate) {
-          db.ref(`${roomId}/${pseudo}/candidates/${peerId}`).push(e.candidate);
-        }
-      };
-
-      pc.ontrack = e => {
-        const audio = new Audio();
-        audio.srcObject = e.streams[0];
-        audio.play();
-      };
-    }
-
-    joinButton.onclick = async () => {
+    joinBtn.addEventListener('click', async () => {
+      const pseudo = pseudoInput.value;
       const freq = freqInput.value;
-      if (!freq) return;
-      if (!micOn) await micButton.onclick();
-      await joinRoom(freq);
-      for (const peerId in (await db.ref(roomId).get()).val() || {}) {
-        if (peerId !== pseudo) startCall(peerId);
-      }
-    };
+      const motd = motdInput.value;
+      if (!pseudo || !freq) return alert("Pseudo et fréquence obligatoires");
 
-    function startVolumeMeter() {
-      const context = new (window.AudioContext || window.webkitAudioContext)();
-      const analyser = context.createAnalyser();
-      const micSource = context.createMediaStreamSource(localStream);
-      micSource.connect(analyser);
-      analyser.fftSize = 256;
-      const data = new Uint8Array(analyser.frequencyBinCount);
+      const freqKey = 'freq-' + freq.replace('.', '');
+      const userId = Date.now();
 
-      function draw() {
-        requestAnimationFrame(draw);
-        analyser.getByteFrequencyData(data);
-        const avg = data.reduce((a, b) => a + b) / data.length;
-        const height = Math.min(avg * 1.5, 100);
-        volumeBar.style.height = `${height}%`;
-      }
-      draw();
+      const usersRef = db.ref(`frequencies/${freqKey}/users`);
+      const motdRef = db.ref(`frequencies/${freqKey}/motd`);
+
+      const snap = await usersRef.once('value');
+      if (!snap.exists()) motdRef.set(motd);
+
+      usersRef.child(userId).set({ name: pseudo });
+      window.addEventListener('beforeunload', () => {
+        usersRef.child(userId).remove();
+      });
+    });
+
+    async function startMic() {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      localStream = stream;
+      const ctx = new AudioContext();
+      const src = ctx.createMediaStreamSource(stream);
+      analyser = ctx.createAnalyser();
+      analyser.fftSize = 128;
+      src.connect(analyser);
+      animateVolume();
     }
 
-    navigator.mediaDevices.enumerateDevices().then(devices => {
+    function animateVolume() {
+      const data = new Uint8Array(analyser.frequencyBinCount);
+      analyser.getByteFrequencyData(data);
+      const volume = Math.max(...data);
+      volumeLevel.style.height = (volume / 255 * 100) + '%';
+      requestAnimationFrame(animateVolume);
+    }
+
+    micBtn.addEventListener('click', startMic);
+    muteBtn.addEventListener('click', () => {
+      if (localStream) {
+        localStream.getTracks().forEach(t => t.enabled = !t.enabled);
+      }
+    });
+
+    async function populateDevices() {
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      const inputSelect = document.getElementById('inputSelect');
+      const outputSelect = document.getElementById('outputSelect');
+      inputSelect.innerHTML = '';
+      outputSelect.innerHTML = '';
+
       devices.forEach(device => {
-        const option = document.createElement("option");
+        const option = document.createElement('option');
         option.value = device.deviceId;
         option.text = device.label || `${device.kind}`;
-        if (device.kind === "audioinput") inputSelect.appendChild(option);
-        if (device.kind === "audiooutput") outputSelect.appendChild(option);
+        if (device.kind === 'audioinput') inputSelect.appendChild(option);
+        if (device.kind === 'audiooutput') outputSelect.appendChild(option);
       });
-    });
+    }
+    populateDevices();
   </script>
 </body>
 </html>
