@@ -199,6 +199,14 @@ if (typeof DeviceOrientationEvent?.requestPermission === 'function') {
 
       
       startBtn.style.display = "none";
+      // Débloquer l'audio iOS en jouant un son au clic utilisateur
+sounds.stall.volume = 0;
+sounds.stall.play().then(() => {
+  sounds.stall.pause();
+  sounds.stall.currentTime = 0;
+  sounds.stall.volume = 1; // Remet le volume après
+}).catch(() => {});
+
       stopBtn.style.display = "inline-block";
 
       // Déclenche un son silencieux pour débloquer autoplay audio
