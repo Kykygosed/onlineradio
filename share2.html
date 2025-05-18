@@ -81,11 +81,28 @@
     let prevTime = null;
     let devicePitch = 0;
 
-window.addEventListener("deviceorientation", event => {
-  if (event.beta !== null) {
-    devicePitch = event.beta; // Inclinaison avant/arrière en degrés
-  }
-});
+if (typeof DeviceOrientationEvent?.requestPermission === 'function') {
+  DeviceOrientationEvent.requestPermission()
+    .then(state => {
+      if (state === 'granted') {
+        window.addEventListener("deviceorientation", event => {
+          if (event.beta !== null) {
+            devicePitch = event.beta;
+          }
+        });
+      }
+    })
+    .catch(console.error);
+} else {
+  
+  // Navigateurs Android ou desktop qui ne demandent pas de permission
+  window.addEventListener("deviceorientation", event => {
+    if (event.beta !== null) {
+      devicePitch = event.beta;
+    }
+  });
+}
+
 
     // Sons locaux (à placer dans le même dossier)
     const sounds = {
@@ -141,11 +158,11 @@ function showAlert(message) {
 
       const pitch = data.pitch = devicePitch;
       const speed = data.speed || 0; // km/h
-      const altitude = data.altitude || 0; // m
+      const altitude = typeof data.altitude === 'number' ? data.altitude : 9999;
       const verticalSpeed = data.verticalSpeed || 0; // m/s
 
       // Décrochage (stall): pitch > 10° & vitesse < 120 km/h
-      if (pitch > 10 && speed < 120) {
+      if (pitch > 10 && speed > 10 && speed < 120) {
         if (now - lastAlarmTime.stall > alarmCooldown) {
           playAlarm('stall');
           lastAlarmTime.stall = now;
@@ -156,8 +173,8 @@ function showAlert(message) {
       // Sink rate: descente rapide > 10 m/s
       if (verticalSpeed < -10) {
         if (now - lastAlarmTime.sinkRate > alarmCooldown) {
-          playAlarm('sinkRate');
-          lastAlarmTime.sinkRate = now;
+          playAlarm('sinkrate');
+          lastAlarmTime.sinkrate = now;
           showAlert("SINK RATE! Sink rate!");
         }
       }
