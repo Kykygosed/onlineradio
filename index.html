@@ -114,30 +114,31 @@ function removeMarker(callsign) {
   }
 }
 
-// Lecture en temps réel des positions Firebase
-db.ref('positions').on('value', snapshot => {
-  const data = snapshot.val() || {};
-  const now = Date.now();
+function fetchPositions() {
+  db.ref('positions').once('value').then(snapshot => {
+    const data = snapshot.val() || {};
+    const now = Date.now();
 
-  // Liste des callsign reçus
-  const callsigns = Object.keys(data);
+    const callsigns = Object.keys(data);
+    const toRemove = Object.keys(markers).filter(c => !callsigns.includes(c));
+    toRemove.forEach(removeMarker);
 
-  // Marqueurs à supprimer (qui ne sont plus dans data)
-  const toRemove = Object.keys(markers).filter(c => !callsigns.includes(c));
-
-  toRemove.forEach(removeMarker);
-
-  for (const callsign in data) {
-    const pos = data[callsign];
-
-    // Affiche si update récente ou si stopped (point rouge)
-    if (pos.lastUpdate && (now - pos.lastUpdate <= MAX_AGE_MS || pos.stopped)) {
-      updateMarker(callsign, pos.lat, pos.lon, pos.stopped || false);
-    } else {
-      removeMarker(callsign);
+    for (const callsign in data) {
+      const pos = data[callsign];
+      if (pos.lastUpdate && (now - pos.lastUpdate <= MAX_AGE_MS || pos.stopped)) {
+        updateMarker(callsign, pos.lat, pos.lon, pos.stopped || false);
+      } else {
+        removeMarker(callsign);
+      }
     }
-  }
-});
+  });
+}
+
+// Appel initial
+fetchPositions();
+
+// Actualisation toutes les secondes
+setInterval(fetchPositions, 1000);
 </script>
 
 </body>
