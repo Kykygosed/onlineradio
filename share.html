@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Partager Position - Radar ATC</title>
+<title>Partage de position</title>
 
 <style>
   body {
@@ -13,45 +13,48 @@
     display: flex;
     flex-direction: column;
     align-items: center;
-    justify-content: center;
-    height: 100vh;
-    margin: 0;
-    user-select: none;
+    padding: 2rem;
   }
   label, input, button {
-    font-size: 1.2em;
-    margin: 10px 0;
-    color: #0f0;
-    background: black;
+    font-size: 1.2rem;
+    margin: 0.5rem 0;
+  }
+  input {
+    padding: 0.3rem;
+    width: 200px;
+    background: #111;
     border: 1px solid #0f0;
-    padding: 8px;
-    font-family: monospace;
+    color: #0f0;
     text-transform: uppercase;
+    font-weight: bold;
   }
   button {
     cursor: pointer;
+    background: #0099ff;
+    border: none;
+    padding: 0.7rem 1.5rem;
+    color: white;
     font-weight: bold;
-    width: 200px;
+    transition: background 0.3s;
+  }
+  button:hover {
+    background: #0077cc;
   }
   #status {
-    margin-top: 20px;
-    font-size: 1em;
-  }
-  #btn-stop {
-    background-color: #800000;
-    border-color: #f00;
-    color: #f00;
+    margin-top: 1rem;
+    font-size: 1rem;
+    min-height: 1.2rem;
   }
 </style>
 </head>
 <body>
 
 <h1>Partager ma position</h1>
-<label for="callsign">CALLSIGN :</label>
-<input type="text" id="callsign" maxlength="10" placeholder="EX: KENZO" autocomplete="off" />
 
-<button id="btn-start">Démarrer le partage</button>
-<button id="btn-stop" disabled>Arrêter le partage</button>
+<label for="callsign">Callsign :</label>
+<input type="text" id="callsign" maxlength="10" placeholder="ENTREZ VOTRE CALLSIGN" />
+
+<button id="toggleShare">Démarrer le partage</button>
 
 <div id="status"></div>
 
@@ -59,7 +62,7 @@
 <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-database-compat.js"></script>
 
 <script>
-// Config Firebase
+// Config Firebase (même config que index.html)
 const firebaseConfig = {
   apiKey: "AIzaSyABEP_KAW9R4dYpnDS9BANn6vcQCICxzrU",
   authDomain: "kenzomc-ad1c2.firebaseapp.com",
@@ -70,86 +73,85 @@ const firebaseConfig = {
   appId: "1:459457032331:web:af7e0d8c958a807ce2648e",
   measurementId: "G-341YD1GPC5"
 };
-
 firebase.initializeApp(firebaseConfig);
 const db = firebase.database();
 
-let watchId = null;
-let currentCallsign = null;
-
+const btn = document.getElementById('toggleShare');
+const callsignInput = document.getElementById('callsign');
 const statusDiv = document.getElementById('status');
-const btnStart = document.getElementById('btn-start');
-const btnStop = document.getElementById('btn-stop');
 
-btnStart.addEventListener('click', () => {
-  const callsignInput = document.getElementById('callsign');
+let watchId = null;
+let sharing = false;
+
+function updateStatus(msg) {
+  statusDiv.textContent = msg;
+}
+
+function sendPosition(lat, lon) {
   const callsign = callsignInput.value.trim().toUpperCase();
-
   if (!callsign) {
-    alert('Merci de saisir un callsign');
+    updateStatus('Entrez un callsign valide');
     return;
   }
-
-  if (!navigator.geolocation) {
-    alert('Géolocalisation non supportée par ce navigateur');
-    return;
-  }
-
-  if (watchId !== null) {
-    alert('Le partage est déjà actif');
-    return;
-  }
-
-  currentCallsign = callsign;
-
-  statusDiv.textContent = 'Démarrage du partage...';
-
-  watchId = navigator.geolocation.watchPosition(position => {
-    const lat = position.coords.latitude;
-    const lon = position.coords.longitude;
-
-    db.ref('positions/' + currentCallsign).set({
-      lat,
-      lon,
-      lastUpdate: Date.now()
-    });
-
-    statusDiv.textContent = `Position envoyée : ${lat.toFixed(5)}, ${lon.toFixed(5)}`;
-  }, error => {
-    statusDiv.textContent = `Erreur géolocalisation : ${error.message}`;
-  }, {
-    enableHighAccuracy: true,
-    maximumAge: 1000,
-    timeout: 10000
+  const now = Date.now();
+  db.ref('positions/' + callsign).set({
+    lat,
+    lon,
+    lastUpdate: now,
+    stopped: false
   });
+  updateStatus(`Position envoyée à ${new Date(now).toLocaleTimeString()}`);
+}
 
-  btnStart.disabled = true;
-  btnStop.disabled = false;
-  callsignInput.disabled = true;
-});
-
-btnStop.addEventListener('click', () => {
+function stopSharing() {
+  const callsign = callsignInput.value.trim().toUpperCase();
+  if (callsign) {
+    db.ref('positions/' + callsign).update({
+      stopped: true
+    });
+  }
   if (watchId !== null) {
     navigator.geolocation.clearWatch(watchId);
     watchId = null;
+  }
+  updateStatus('Partage arrêté');
+}
 
-    if (currentCallsign) {
-      // au lieu de supprimer, on met stopped: true
-      db.ref('positions/' + currentCallsign).update({
-        stopped: true,
-        lastUpdate: Date.now()
-      });
+btn.addEventListener('click', () => {
+  if (!sharing) {
+    // Démarrer le partage
+    const callsign = callsignInput.value.trim().toUpperCase();
+    if (!callsign) {
+      updateStatus('Veuillez entrer un callsign avant de démarrer');
+      return;
     }
-
-    statusDiv.textContent = 'Partage arrêté (point en rouge sur radar).';
-    currentCallsign = null;
-
-    btnStart.disabled = false;
-    btnStop.disabled = true;
-    document.getElementById('callsign').disabled = false;
+    if (!navigator.geolocation) {
+      updateStatus('Géolocalisation non supportée par ce navigateur');
+      return;
+    }
+    watchId = navigator.geolocation.watchPosition(
+      pos => {
+        sendPosition(pos.coords.latitude, pos.coords.longitude);
+      },
+      err => {
+        updateStatus('Erreur géolocalisation: ' + err.message);
+      },
+      {
+        enableHighAccuracy: true,
+        maximumAge: 1000,
+        timeout: 5000
+      }
+    );
+    sharing = true;
+    btn.textContent = 'Arrêter le partage';
+    updateStatus('Partage démarré...');
+  } else {
+    // Arrêter le partage
+    stopSharing();
+    sharing = false;
+    btn.textContent = 'Démarrer le partage';
   }
 });
-
 </script>
 
 </body>
