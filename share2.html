@@ -101,18 +101,27 @@
     const sounds = {
       stall: new Audio('stall.mp3'),
       sinkRate: new Audio('sinkrate.mp3'),
-      terrain: new Audio('terrain.mp3')
+      terrain: new Audio('terrain.mp3'),
+      steepPitch: new Audio('steep_pitch.mp3')
     };
     const alarmCooldown = 1000;
-    let lastAlarmTime = { stall: 0, sinkRate: 0, terrain: 0 };
+    let lastAlarmTime = { stall: 0, sinkRate: 0, terrain: 0, steepPitch: 0 };
+    let currentAlarm = null;
 
     function playAlarm(type) {
+      if (currentAlarm === type) return; // Ne rejoue pas la même alarme
+
       if (sounds[type]) {
         try {
+          currentAlarm = type;
           sounds[type].currentTime = 0;
           sounds[type].play();
+          sounds[type].onended = () => {
+            if (currentAlarm === type) currentAlarm = null;
+          };
         } catch (e) {
           console.warn("Erreur lecture son:", e);
+          if (currentAlarm === type) currentAlarm = null;
         }
       }
     }
@@ -128,7 +137,9 @@
       div.style.textAlign = "center";
       div.style.fontWeight = "bold";
       gpwsAlert.appendChild(div);
-      setTimeout(() => gpwsAlert.removeChild(div), 5000);
+      setTimeout(() => {
+        if (gpwsAlert.contains(div)) gpwsAlert.removeChild(div);
+      }, 5000);
     }
 
     function checkGPWS(data) {
@@ -142,16 +153,18 @@
         playAlarm('stall');
         lastAlarmTime.stall = now;
         showAlert("STALL WARNING - Décrochage détecté !");
-      }
-      if (verticalSpeed < -10 && now - lastAlarmTime.sinkRate > alarmCooldown) {
+      } else if (verticalSpeed < -10 && now - lastAlarmTime.sinkRate > alarmCooldown) {
         playAlarm('sinkRate');
         lastAlarmTime.sinkRate = now;
         showAlert("SINK RATE! Sink rate!");
-      }
-      if (altitude < 160 && now - lastAlarmTime.terrain > alarmCooldown) {
+      } else if (altitude < 160 && now - lastAlarmTime.terrain > alarmCooldown) {
         playAlarm('terrain');
         lastAlarmTime.terrain = now;
         showAlert("TERRAIN AHEAD! Pull up! Pull up!");
+      } else if (Math.abs(pitch) > 30 && now - lastAlarmTime.steepPitch > alarmCooldown) {
+        playAlarm('steepPitch');
+        lastAlarmTime.steepPitch = now;
+        showAlert("PITCH ANGLE EXCEEDED!");
       }
     }
 
