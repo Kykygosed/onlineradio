@@ -96,21 +96,30 @@
     let lastLat = null, lastLon = null, lastTime = null;
     let prevAltitude = null, prevTime = null;
     let devicePitch = 0;
+    let deviceRoll = 0;
     let gpwsInterval = null;
 
     const sounds = {
       stall: new Audio('stall.mp3'),
       sinkRate: new Audio('sinkrate.mp3'),
       terrain: new Audio('terrain.mp3'),
-      steepPitch: new Audio('steep_pitch.mp3')
+      steepPitch: new Audio('steep_pitch.mp3'),
+      bankAngle: new Audio('bankangle.mp3'),
+      overspeed: new Audio('overspeed.mp3')
     };
     const alarmCooldown = 1000;
-    let lastAlarmTime = { stall: 0, sinkRate: 0, terrain: 0, steepPitch: 0 };
+    let lastAlarmTime = {
+      stall: 0,
+      sinkRate: 0,
+      terrain: 0,
+      steepPitch: 0,
+      bankAngle: 0,
+      overspeed: 0
+    };
     let currentAlarm = null;
 
     function playAlarm(type) {
-      if (currentAlarm === type) return; // Ne rejoue pas la même alarme
-
+      if (currentAlarm === type) return;
       if (sounds[type]) {
         try {
           currentAlarm = type;
@@ -145,6 +154,7 @@
     function checkGPWS(data) {
       const now = Date.now();
       const pitch = devicePitch;
+      const roll = deviceRoll;
       const speed = data.speed || 0;
       const altitude = typeof data.altitude === 'number' ? data.altitude : 9999;
       const verticalSpeed = data.verticalSpeed || 0;
@@ -165,6 +175,14 @@
         playAlarm('steepPitch');
         lastAlarmTime.steepPitch = now;
         showAlert("PITCH ANGLE EXCEEDED!");
+      } else if (Math.abs(roll) > 35 && now - lastAlarmTime.bankAngle > alarmCooldown) {
+        playAlarm('bankAngle');
+        lastAlarmTime.bankAngle = now;
+        showAlert("BANK ANGLE! BANK ANGLE!");
+      } else if (speed > 250 && now - lastAlarmTime.overspeed > alarmCooldown) {
+        playAlarm('overspeed');
+        lastAlarmTime.overspeed = now;
+        showAlert("OVERSPEED! REDUCE SPEED!");
       }
     }
 
@@ -177,6 +195,7 @@
           if (state === 'granted') {
             window.addEventListener("deviceorientation", e => {
               if (e.beta !== null) devicePitch = e.beta;
+              if (e.gamma !== null) deviceRoll = e.gamma;
             });
           } else {
             alert("Autorisation capteurs refusée.");
@@ -185,6 +204,7 @@
       } else {
         window.addEventListener("deviceorientation", e => {
           if (e.beta !== null) devicePitch = e.beta;
+          if (e.gamma !== null) deviceRoll = e.gamma;
         });
       }
 
