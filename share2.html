@@ -104,7 +104,6 @@
       sinkRate: new Audio('sinkrate.mp3'),
       terrain: new Audio('terrain.mp3'),
       steepPitch: new Audio('steep_pitch.mp3'),
-      bankAngle: new Audio('bankangle.mp3'),
       overspeed: new Audio('overspeed.mp3')
     };
     const alarmCooldown = 1000;
@@ -113,7 +112,6 @@
       sinkRate: 0,
       terrain: 0,
       steepPitch: 0,
-      bankAngle: 0,
       overspeed: 0
     };
     let currentAlarm = null;
@@ -167,7 +165,7 @@
         playAlarm('sinkRate');
         lastAlarmTime.sinkRate = now;
         showAlert("SINK RATE! Sink rate!");
-      } else if (altitude < 160 && now - lastAlarmTime.terrain > alarmCooldown) {
+      } else if (altitude < 160 && speed > 0 && Math.abs(verticalSpeed) > 0 && now - lastAlarmTime.terrain > alarmCooldown) {
         playAlarm('terrain');
         lastAlarmTime.terrain = now;
         showAlert("TERRAIN AHEAD! Pull up! Pull up!");
@@ -175,10 +173,6 @@
         playAlarm('steepPitch');
         lastAlarmTime.steepPitch = now;
         showAlert("PITCH ANGLE EXCEEDED!");
-      } else if (Math.abs(roll) > 35 && now - lastAlarmTime.bankAngle > alarmCooldown) {
-        playAlarm('bankAngle');
-        lastAlarmTime.bankAngle = now;
-        showAlert("BANK ANGLE! BANK ANGLE!");
       } else if (speed > 250 && now - lastAlarmTime.overspeed > alarmCooldown) {
         playAlarm('overspeed');
         lastAlarmTime.overspeed = now;
