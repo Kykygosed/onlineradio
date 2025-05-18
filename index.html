@@ -118,42 +118,30 @@ function createMarkerIcon(callsign, emergency = false) {
 }
 
 function updateMarker(callsign, lat, lon, stopped = false, emergency = false) {
+  // Si stopped true, forcer emergency false côté affichage (ne jamais afficher urgence si stopped)
+  if (stopped) emergency = false;
+
   let marker = markers[callsign];
   if (!marker) {
     const icon = createMarkerIcon(callsign, emergency);
     marker = L.marker([lat, lon], { icon }).addTo(map);
     markers[callsign] = marker;
 
-    // Gérer le clic sur marker
     marker.on('click', () => {
       if (selectedCallsign && selectedCallsign !== callsign) {
-        // Hide bouton du précédent sélectionné
         hideEmergencyButton(selectedCallsign);
       }
       selectedCallsign = callsign;
-      toggleEmergencyButton(marker, callsign);
+      toggleEmergencyButton(marker, callsign, stopped);
     });
   } else {
     marker.setLatLng([lat, lon]);
-    // Mise à jour de l'icône si besoin
     const icon = createMarkerIcon(callsign, emergency);
     marker.setIcon(icon);
   }
 }
 
-function hideEmergencyButton(callsign) {
-  const marker = markers[callsign];
-  if (!marker) return;
-  const el = marker.getElement();
-  if (!el) return;
-  const btn = el.querySelector('.emergency-btn');
-  if (btn) {
-    btn.style.display = 'none';
-    btn.onclick = null;
-  }
-}
-
-function toggleEmergencyButton(marker, callsign) {
+function toggleEmergencyButton(marker, callsign, stopped) {
   const el = marker.getElement();
   if (!el) return;
   const btn = el.querySelector('.emergency-btn');
@@ -162,32 +150,32 @@ function toggleEmergencyButton(marker, callsign) {
   if (btn.style.display === 'none' || btn.style.display === '') {
     btn.style.display = 'inline-block';
 
-    // Récupérer l'état emergency actuel dans Firebase pour ce callsign
+    // Si stopped, on disable le bouton d'urgence (on peut pas l'activer)
+    if (stopped) {
+      btn.textContent = 'PARTAGE ARRÊTÉ';
+      btn.disabled = true;
+      btn.style.background = '#555';
+      btn.onclick = null;
+      return;
+    } else {
+      btn.disabled = false;
+      btn.style.background = '#b35200';
+    }
+
     db.ref('positions/' + callsign + '/emergency').get().then(snap => {
       const isEmergency = snap.exists() && snap.val() === true;
       btn.textContent = isEmergency ? 'Désactiver URGENCE' : 'SIGNAL D’URGENCE';
-      
+
       btn.onclick = () => {
         const newState = !isEmergency;
         db.ref('positions/' + callsign).update({ emergency: newState });
-        // Met à jour texte bouton
         btn.textContent = newState ? 'Désactiver URGENCE' : 'SIGNAL D’URGENCE';
-        // Mise à jour icône du marker (force update)
-        updateMarker(callsign, marker.getLatLng().lat, marker.getLatLng().lng, false, newState);
+        updateMarker(callsign, marker.getLatLng().lat, marker.getLatLng().lng, stopped, newState);
       };
     });
   } else {
     btn.style.display = 'none';
     btn.onclick = null;
-  }
-}
-
-function removeMarker(callsign) {
-  const marker = markers[callsign];
-  if (marker) {
-    map.removeLayer(marker);
-    delete markers[callsign];
-    if (selectedCallsign === callsign) selectedCallsign = null;
   }
 }
 
@@ -202,7 +190,9 @@ function fetchPositions() {
 
     for (const callsign in data) {
       const pos = data[callsign];
+      // Si plus de 30s et pas stopped, on supprime
       if (pos.lastUpdate && (now - pos.lastUpdate <= MAX_AGE_MS || pos.stopped)) {
+        // Forcer emergency false si stopped dans l'affichage
         updateMarker(callsign, pos.lat, pos.lon, pos.stopped || false, pos.emergency || false);
       } else {
         removeMarker(callsign);
@@ -210,6 +200,7 @@ function fetchPositions() {
     }
   });
 }
+
 
 // Appel initial
 fetchPositions();
