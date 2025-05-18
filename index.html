@@ -3,72 +3,60 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Radar ATC - Positions</title>
+<title>Radar ATC - Carte des positions</title>
 
 <link
   rel="stylesheet"
   href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
 />
-
 <style>
-  html, body {
-    height: 100%;
-    margin: 0;
+  body, html {
+    margin: 0; padding: 0; height: 100%;
     background: black;
     color: #0f0;
-    font-family: monospace, monospace;
-    user-select: none;
+    font-family: monospace;
   }
   #map {
     height: 100vh;
-    width: 100vw;
+    filter: grayscale(100%) brightness(0.8);
   }
-  #btn-share {
-    position: absolute;
-    top: 10px; right: 10px;
-    padding: 10px 20px;
-    background: #006400; /* dark green */
-    color: #0f0;
-    border: 2px solid #0f0;
-    border-radius: 5px;
-    cursor: pointer;
+  /* Style custom des markers */
+  .custom-marker {
+    text-align: center;
+    pointer-events: none; /* clics passent à la carte */
+  }
+  .custom-marker .callsign-label {
     font-weight: bold;
-    font-size: 16px;
-    z-index: 1000;
+    text-transform: uppercase;
+    font-size: 12px;
+    color: #0f0;
+    margin-bottom: 2px;
+    user-select: none;
     text-shadow:
       -1px -1px 0 #000,
       1px -1px 0 #000,
       -1px 1px 0 #000,
       1px 1px 0 #000;
   }
-  .callsign-label-no-tooltip {
-    color: #00ff00;
-    font-weight: bold;
-    font-family: monospace;
-    text-transform: uppercase;
-    font-size: 14px;
-    text-shadow:
-      -1px -1px 2px #000,
-      1px -1px 2px #000,
-      -1px 1px 2px #000,
-      1px 1px 2px #000;
-    pointer-events: none;
-    white-space: nowrap;
-    user-select: none;
+  .custom-marker .dot {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background-color: #0099ff; /* bleu par défaut */
+    margin: 0 auto;
   }
 </style>
 </head>
 <body>
 
-<button id="btn-share">Partager ma position</button>
 <div id="map"></div>
 
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-database-compat.js"></script>
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
 <script>
-// Ta config Firebase
+// Config Firebase (ta config)
 const firebaseConfig = {
   apiKey: "AIzaSyABEP_KAW9R4dYpnDS9BANn6vcQCICxzrU",
   authDomain: "kenzomc-ad1c2.firebaseapp.com",
@@ -79,53 +67,24 @@ const firebaseConfig = {
   appId: "1:459457032331:web:af7e0d8c958a807ce2648e",
   measurementId: "G-341YD1GPC5"
 };
-
 firebase.initializeApp(firebaseConfig);
 const db = firebase.database();
 
-const map = L.map('map').setView([48.8566, 2.3522], 12); // Centré sur Paris
+// Initialisation carte Leaflet
+const map = L.map('map').setView([48.8566, 2.3522], 12); // Paris par défaut
 
-// Carte sombre style ATC
-L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-  attribution: '&copy; OpenStreetMap contributors &copy; CARTO',
-  maxZoom: 19
+// TileLayer noir/blanc style ATC (OpenStreetMap B&W style)
+L.tileLayer('https://tiles.wmflabs.org/bw-mapnik/{z}/{x}/{y}.png', {
+  attribution: '© OpenStreetMap contributors',
+  maxZoom: 18
 }).addTo(map);
 
-// Ajout d'une grille verte légère
-function addGrid(map) {
-  const latMin = 48.7;
-  const latMax = 49.0;
-  const lonMin = 2.2;
-  const lonMax = 2.6;
-  const step = 0.01;
-
-  for(let lat = latMin; lat <= latMax; lat += step) {
-    L.polyline([[lat, lonMin], [lat, lonMax]], {
-      color: '#00ff00',
-      weight: 1,
-      opacity: 0.15,
-      interactive: false
-    }).addTo(map);
-  }
-
-  for(let lon = lonMin; lon <= lonMax; lon += step) {
-    L.polyline([[latMin, lon], [latMax, lon]], {
-      color: '#00ff00',
-      weight: 1,
-      opacity: 0.15,
-      interactive: false
-    }).addTo(map);
-  }
-}
-addGrid(map);
-
 const markers = {};
-const MAX_AGE_MS = 30 * 1000; // 30 secondes
+const MAX_AGE_MS = 30000; // 30s max avant suppression
 
 function updateMarker(callsign, lat, lon, stopped = false) {
   let marker = markers[callsign];
   if (!marker) {
-    // création du marker avec un div icon
     const icon = L.divIcon({
       className: 'custom-marker',
       html: `<div class="callsign-label">${callsign}</div><div class="dot"></div>`,
@@ -138,45 +97,47 @@ function updateMarker(callsign, lat, lon, stopped = false) {
     marker.setLatLng([lat, lon]);
   }
 
-  // Mise à jour du style selon stopped
+  // Mise à jour couleur dot selon stopped
   const el = marker.getElement();
   if (el) {
-    if (stopped) {
-      el.querySelector('.dot').style.backgroundColor = 'red';
-    } else {
-      el.querySelector('.dot').style.backgroundColor = '#0099ff';
+    const dot = el.querySelector('.dot');
+    if (dot) {
+      dot.style.backgroundColor = stopped ? 'red' : '#0099ff';
     }
   }
 }
 
+function removeMarker(callsign) {
+  const marker = markers[callsign];
+  if (marker) {
+    map.removeLayer(marker);
+    delete markers[callsign];
+  }
+}
 
-// Écoute en temps réel sur Firebase
+// Lecture en temps réel des positions Firebase
 db.ref('positions').on('value', snapshot => {
-  const data = snapshot.val();
-  if (!data) return;
-
+  const data = snapshot.val() || {};
   const now = Date.now();
 
-  // Supprime markers trop vieux ou absents
-  for (const key in markers) {
-    if (!data[key] || (now - data[key].lastUpdate) > MAX_AGE_MS) {
-      map.removeLayer(markers[key].marker);
-      map.removeLayer(markers[key].label);
-      delete markers[key];
-    }
-  }
+  // Liste des callsign reçus
+  const callsigns = Object.keys(data);
 
-  // Met à jour ou crée les markers valides
+  // Marqueurs à supprimer (qui ne sont plus dans data)
+  const toRemove = Object.keys(markers).filter(c => !callsigns.includes(c));
+
+  toRemove.forEach(removeMarker);
+
   for (const callsign in data) {
     const pos = data[callsign];
-    if ((now - pos.lastUpdate) <= MAX_AGE_MS) {
-      updateMarker(callsign, pos.lat, pos.lon);
+
+    // Affiche si update récente ou si stopped (point rouge)
+    if (pos.lastUpdate && (now - pos.lastUpdate <= MAX_AGE_MS || pos.stopped)) {
+      updateMarker(callsign, pos.lat, pos.lon, pos.stopped || false);
+    } else {
+      removeMarker(callsign);
     }
   }
-});
-
-document.getElementById('btn-share').addEventListener('click', () => {
-  window.location.href = 'share.html';
 });
 </script>
 
