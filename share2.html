@@ -28,30 +28,29 @@
       color: black;
       cursor: pointer;
     }
-#gpwsAlert {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  width: 90vw;
-  max-width: 400px;
-  margin-top: 10px;
-  gap: 5px;
-}
-#indicateurs {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  border: 1px solid lime;
-  padding: 10px;
-  width: 90vw;
-  max-width: 400px;
-  font-size: 16px;
-}
-#indicateurs span {
-  color: red;
-  font-weight: bold;
-}
-
+    #gpwsAlert {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      width: 90vw;
+      max-width: 400px;
+      margin-top: 10px;
+      gap: 5px;
+    }
+    #indicateurs {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      border: 1px solid lime;
+      padding: 10px;
+      width: 90vw;
+      max-width: 400px;
+      font-size: 16px;
+    }
+    #indicateurs span {
+      color: red;
+      font-weight: bold;
+    }
     @keyframes blink {
       0% {opacity: 1;}
       100% {opacity: 0.3;}
@@ -64,24 +63,22 @@
   <button id="startBtn">Démarrer</button>
   <button id="stopBtn" style="display:none;">Arrêter</button>
   <div id="indicateurs">
-  <div>Pitch: <span id="pitchVal">0</span>°</div>
-  <div>Vitesse verticale: <span id="vsVal">0</span> m/s</div>
-  <div>Vitesse horizontale: <span id="speedVal">0</span> km/h</div>
-  <div>Altitude: <span id="altVal">0</span> m</div>
-</div>
-
+    <div>Pitch: <span id="pitchVal">0</span>°</div>
+    <div>Vitesse verticale: <span id="vsVal">0</span> m/s</div>
+    <div>Vitesse horizontale: <span id="speedVal">0</span> km/h</div>
+    <div>Altitude: <span id="altVal">0</span> m</div>
+  </div>
   <div id="gpwsAlert"></div>
 
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
   <script>
-    // Firebase config
     const firebaseConfig = {
       apiKey: "AIzaSyABEP_KAW9R4dYpnDS9BANn6vcQCICxzrU",
       authDomain: "kenzomc-ad1c2.firebaseapp.com",
       databaseURL: "https://kenzomc-ad1c2-default-rtdb.firebaseio.com",
       projectId: "kenzomc-ad1c2",
-      storageBucket: "kenzomc-ad1c2.firebasestorage.app",
+      storageBucket: "kenzomc-ad1c2.appspot.com",
       messagingSenderId: "459457032331",
       appId: "1:459457032331:web:af7e0d8c958a807ce2648e",
       measurementId: "G-341YD1GPC5"
@@ -96,27 +93,18 @@
 
     let watchId = null;
     let lastLat = null, lastLon = null, lastTime = null;
-
     let prevAltitude = null;
     let prevTime = null;
     let devicePitch = 0;
 
-
-
-    // Sons locaux (à placer dans le même dossier)
     const sounds = {
-      stall: new Audio('stall.mp3'),     // Son décrochage
-      sinkRate: new Audio('sinkrate.mp3'), // Son sink rate
-      terrain: new Audio('terrain.mp3')    // Son terrain ahead
+      stall: new Audio('stall.mp3'),
+      sinkRate: new Audio('sinkrate.mp3'),
+      terrain: new Audio('terrain.mp3')
     };
 
-    // Cooldown en ms pour éviter répétition trop fréquente
     const alarmCooldown = 1000;
-    let lastAlarmTime = {
-      stall: 0,
-      sinkRate: 0,
-      terrain: 0
-    };
+    let lastAlarmTime = { stall: 0, sinkRate: 0, terrain: 0 };
 
     function playAlarm(type) {
       if (sounds[type]) {
@@ -129,38 +117,30 @@
       }
     }
 
-function showAlert(message) {
-  const div = document.createElement("div");
-  div.textContent = message;
-  div.style.border = "2px solid red";
-  div.style.padding = "10px";
-  div.style.marginTop = "5px";
-  div.style.animation = "blink 1s infinite alternate";
-  div.style.color = "red";
-  div.style.textAlign = "center";
-  div.style.fontWeight = "bold";
-  gpwsAlert.appendChild(div);
+    function showAlert(message) {
+      const div = document.createElement("div");
+      div.textContent = message;
+      div.style.border = "2px solid red";
+      div.style.padding = "10px";
+      div.style.marginTop = "5px";
+      div.style.animation = "blink 1s infinite alternate";
+      div.style.color = "red";
+      div.style.textAlign = "center";
+      div.style.fontWeight = "bold";
+      gpwsAlert.appendChild(div);
 
-  setTimeout(() => {
-    gpwsAlert.removeChild(div);
-  }, 5000);
-}
+      setTimeout(() => {
+        gpwsAlert.removeChild(div);
+      }, 5000);
+    }
 
-
-    // Simulation pitch (à ajuster si tu as la donnée)
-    // Ici on fixe pitch = 15° quand speed < 120 pour test stall
-
-
-    // Fonction GPWS
     function checkGPWS(data) {
       const now = Date.now();
-
       const pitch = data.pitch = devicePitch;
-      const speed = data.speed || 0; // km/h
+      const speed = data.speed || 0;
       const altitude = typeof data.altitude === 'number' ? data.altitude : 9999;
-      const verticalSpeed = data.verticalSpeed || 0; // m/s
+      const verticalSpeed = data.verticalSpeed || 0;
 
-      // Décrochage (stall): pitch > 10° & vitesse < 120 km/h
       if (pitch > 10 && speed > 10 && speed < 120) {
         if (now - lastAlarmTime.stall > alarmCooldown) {
           playAlarm('stall');
@@ -169,16 +149,14 @@ function showAlert(message) {
         }
       }
 
-      // Sink rate: descente rapide > 10 m/s
       if (verticalSpeed < -10) {
         if (now - lastAlarmTime.sinkRate > alarmCooldown) {
-          playAlarm('sinkrate');
-          lastAlarmTime.sinkrate = now;
+          playAlarm('sinkRate');
+          lastAlarmTime.sinkRate = now;
           showAlert("SINK RATE! Sink rate!");
         }
       }
 
-      // Terrain ahead: altitude < 160m
       if (altitude < 160) {
         if (now - lastAlarmTime.terrain > alarmCooldown) {
           playAlarm('terrain');
@@ -191,47 +169,40 @@ function showAlert(message) {
     startBtn.onclick = () => {
       const callsign = callsignInput.value.trim().toUpperCase();
       if (!callsign) return alert("Entrez un callsign.");
-      // Demander la permission deviceorientation (iOS)
-if (typeof DeviceOrientationEvent?.requestPermission === 'function') {
-  DeviceOrientationEvent.requestPermission()
-    .then(state => {
-      if (state === 'granted') {
+
+      if (typeof DeviceOrientationEvent?.requestPermission === 'function') {
+        DeviceOrientationEvent.requestPermission()
+          .then(state => {
+            if (state === 'granted') {
+              window.addEventListener("deviceorientation", event => {
+                if (event.beta !== null) {
+                  devicePitch = event.beta;
+                }
+              });
+            } else {
+              alert("Autorisation capteurs refusée. Le GPWS ne fonctionnera pas.");
+            }
+          })
+          .catch(err => {
+            alert("Erreur permission capteurs : " + err);
+          });
+      } else {
         window.addEventListener("deviceorientation", event => {
           if (event.beta !== null) {
             devicePitch = event.beta;
           }
         });
-      } else {
-        alert("Autorisation capteurs refusée. Le GPWS ne fonctionnera pas.");
       }
-    })
-    .catch(err => {
-      alert("Erreur permission capteurs : " + err);
-    });
-} else {
-  // Android ou desktop
-  window.addEventListener("deviceorientation", event => {
-    if (event.beta !== null) {
-      devicePitch = event.beta;
-    }
-  });
-}
 
-      
       startBtn.style.display = "none";
-      // Débloquer l'audio iOS en jouant un son au clic utilisateur
-sounds.stall.volume = 0;
-sounds.stall.play().then(() => {
-  sounds.stall.pause();
-  sounds.stall.currentTime = 0;
-  sounds.stall.volume = 1; // Remet le volume après
-}).catch(() => {});
-
       stopBtn.style.display = "inline-block";
 
-      // Déclenche un son silencieux pour débloquer autoplay audio
-      // (certains navigateurs exigent interaction avant son)
-      sounds.stall.play().then(() => sounds.stall.pause()).catch(() => {});
+      sounds.stall.volume = 0;
+      sounds.stall.play().then(() => {
+        sounds.stall.pause();
+        sounds.stall.currentTime = 0;
+        sounds.stall.volume = 1;
+      }).catch(() => {});
 
       watchId = navigator.geolocation.watchPosition(
         pos => {
@@ -270,7 +241,6 @@ sounds.stall.play().then(() => {
         { enableHighAccuracy: true }
       );
 
-      // Écoute Firebase en temps réel
       db.ref("positions/" + callsign).on("value", snapshot => {
         const data = snapshot.val();
         if (!data) return;
@@ -289,12 +259,11 @@ sounds.stall.play().then(() => {
         data.verticalSpeed = verticalSpeed;
 
         checkGPWS(data);
-        // MAJ visuels indicateurs
-document.getElementById("pitchVal").innerText = pitch.toFixed(1);
-document.getElementById("vsVal").innerText = verticalSpeed.toFixed(1);
-document.getElementById("speedVal").innerText = (data.speed || 0).toFixed(1);
-document.getElementById("altVal").innerText = (altitude || 0).toFixed(1);
 
+        document.getElementById("pitchVal").innerText = devicePitch.toFixed(1);
+        document.getElementById("vsVal").innerText = verticalSpeed.toFixed(1);
+        document.getElementById("speedVal").innerText = (data.speed || 0).toFixed(1);
+        document.getElementById("altVal").innerText = (data.altitude || 0).toFixed(1);
       });
     };
 
@@ -313,8 +282,8 @@ document.getElementById("altVal").innerText = (altitude || 0).toFixed(1);
       });
 
       startBtn.style.display = "inline-block";
+      stopBtn.style.display = "none";
 
-      // Supprime l'écoute Firebase
       db.ref("positions/" + callsign).off();
 
       gpwsAlert.style.display = "none";
