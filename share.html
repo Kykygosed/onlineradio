@@ -133,12 +133,15 @@ btnStop.addEventListener('click', () => {
     navigator.geolocation.clearWatch(watchId);
     watchId = null;
 
-    // Supprime la position dans Firebase
     if (currentCallsign) {
-      db.ref('positions/' + currentCallsign).remove();
+      // au lieu de supprimer, on met stopped: true
+      db.ref('positions/' + currentCallsign).update({
+        stopped: true,
+        lastUpdate: Date.now()
+      });
     }
 
-    statusDiv.textContent = 'Partage arrêté.';
+    statusDiv.textContent = 'Partage arrêté (point en rouge sur radar).';
     currentCallsign = null;
 
     btnStart.disabled = false;
@@ -146,6 +149,7 @@ btnStop.addEventListener('click', () => {
     document.getElementById('callsign').disabled = false;
   }
 });
+
 </script>
 
 </body>
