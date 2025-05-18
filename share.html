@@ -1,158 +1,126 @@
 <!DOCTYPE html>
 <html lang="fr">
 <head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Partage de position</title>
-
-<style>
-  body {
-    background: black;
-    color: #0f0;
-    font-family: monospace;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    padding: 2rem;
-  }
-  label, input, button {
-    font-size: 1.2rem;
-    margin: 0.5rem 0;
-  }
-  input {
-    padding: 0.3rem;
-    width: 200px;
-    background: #111;
-    border: 1px solid #0f0;
-    color: #0f0;
-    text-transform: uppercase;
-    font-weight: bold;
-  }
-  button {
-    cursor: pointer;
-    background: #0099ff;
-    border: none;
-    padding: 0.7rem 1.5rem;
-    color: white;
-    font-weight: bold;
-    transition: background 0.3s;
-  }
-  button:hover {
-    background: #0077cc;
-  }
-  #status {
-    margin-top: 1rem;
-    font-size: 1rem;
-    min-height: 1.2rem;
-  }
-</style>
+  <meta charset="UTF-8">
+  <title>Partager ma position</title>
+  <style>
+    body {
+      background: black;
+      color: lime;
+      font-family: monospace;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      gap: 1em;
+    }
+    input, button {
+      background: black;
+      color: lime;
+      border: 1px solid lime;
+      padding: 8px;
+      font-family: monospace;
+    }
+    button:hover {
+      background: lime;
+      color: black;
+    }
+  </style>
 </head>
 <body>
+  <h1>PARTAGE POSITION</h1>
+  <input type="text" id="callsign" placeholder="Callsign" />
+  <button id="startBtn">Démarrer</button>
+  <button id="stopBtn" style="display:none;">Arrêter</button>
 
-<h1>Partager ma position</h1>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+  <script>
+    // Firebase config
+    const firebaseConfig = {
+      apiKey: "AIzaSyABEP_KAW9R4dYpnDS9BANn6vcQCICxzrU",
+      authDomain: "kenzomc-ad1c2.firebaseapp.com",
+      databaseURL: "https://kenzomc-ad1c2-default-rtdb.firebaseio.com",
+      projectId: "kenzomc-ad1c2",
+      storageBucket: "kenzomc-ad1c2.firebasestorage.app",
+      messagingSenderId: "459457032331",
+      appId: "1:459457032331:web:af7e0d8c958a807ce2648e",
+      measurementId: "G-341YD1GPC5"
+    };
 
-<label for="callsign">Callsign :</label>
-<input type="text" id="callsign" maxlength="10" placeholder="ENTREZ VOTRE CALLSIGN" />
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.database();
 
-<button id="toggleShare">Démarrer le partage</button>
+    const startBtn = document.getElementById("startBtn");
+    const stopBtn = document.getElementById("stopBtn");
+    const callsignInput = document.getElementById("callsign");
 
-<div id="status"></div>
+    let watchId = null;
+    let lastLat = null, lastLon = null, lastTime = null;
 
-<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-database-compat.js"></script>
+    startBtn.onclick = () => {
+      const callsign = callsignInput.value.trim().toUpperCase();
+      if (!callsign) return alert("Entrez un callsign.");
 
-<script>
-// Config Firebase (même config que index.html)
-const firebaseConfig = {
-  apiKey: "AIzaSyABEP_KAW9R4dYpnDS9BANn6vcQCICxzrU",
-  authDomain: "kenzomc-ad1c2.firebaseapp.com",
-  databaseURL: "https://kenzomc-ad1c2-default-rtdb.firebaseio.com",
-  projectId: "kenzomc-ad1c2",
-  storageBucket: "kenzomc-ad1c2.firebasestorage.app",
-  messagingSenderId: "459457032331",
-  appId: "1:459457032331:web:af7e0d8c958a807ce2648e",
-  measurementId: "G-341YD1GPC5"
-};
-firebase.initializeApp(firebaseConfig);
-const db = firebase.database();
+      startBtn.style.display = "none";
+      stopBtn.style.display = "inline-block";
 
-const btn = document.getElementById('toggleShare');
-const callsignInput = document.getElementById('callsign');
-const statusDiv = document.getElementById('status');
+      watchId = navigator.geolocation.watchPosition(
+        pos => {
+          const { latitude, longitude, altitude } = pos.coords;
+          const now = Date.now();
 
-let watchId = null;
-let sharing = false;
+          let heading = 0;
+          let speed = 0;
 
-function updateStatus(msg) {
-  statusDiv.textContent = msg;
-}
+          if (lastLat !== null && lastLon !== null && lastTime !== null) {
+            const dLat = latitude - lastLat;
+            const dLon = longitude - lastLon;
+            const dist = Math.sqrt(dLat * dLat + dLon * dLon) * 111000; // approx en mètres
+            const dt = (now - lastTime) / 1000; // en sec
+            speed = (dist / dt) * 3.6; // km/h
+            heading = Math.atan2(dLon, dLat) * (180 / Math.PI);
+            heading = (heading + 360) % 360;
+          }
 
-function sendPosition(lat, lon) {
-  const callsign = callsignInput.value.trim().toUpperCase();
-  if (!callsign) {
-    updateStatus('Entrez un callsign valide');
-    return;
-  }
-  const now = Date.now();
-  db.ref('positions/' + callsign).set({
-    lat,
-    lon,
-    lastUpdate: now,
-    stopped: false
-  });
-  updateStatus(`Position envoyée à ${new Date(now).toLocaleTimeString()}`);
-}
+          lastLat = latitude;
+          lastLon = longitude;
+          lastTime = now;
 
-function stopSharing() {
-  const callsign = callsignInput.value.trim().toUpperCase();
-  if (callsign) {
-    db.ref('positions/' + callsign).update({
-      stopped: true
-    });
-  }
-  if (watchId !== null) {
-    navigator.geolocation.clearWatch(watchId);
-    watchId = null;
-  }
-  updateStatus('Partage arrêté');
-}
+          db.ref("positions/" + callsign).set({
+            lat: latitude,
+            lon: longitude,
+            altitude: altitude || null,
+            speed: speed,
+            heading: heading,
+            lastUpdate: now,
+            stopped: false,
+            emergency: false
+          });
+        },
+        err => alert("Erreur GPS : " + err.message),
+        { enableHighAccuracy: true }
+      );
+    };
 
-btn.addEventListener('click', () => {
-  if (!sharing) {
-    // Démarrer le partage
-    const callsign = callsignInput.value.trim().toUpperCase();
-    if (!callsign) {
-      updateStatus('Veuillez entrer un callsign avant de démarrer');
-      return;
-    }
-    if (!navigator.geolocation) {
-      updateStatus('Géolocalisation non supportée par ce navigateur');
-      return;
-    }
-    watchId = navigator.geolocation.watchPosition(
-      pos => {
-        sendPosition(pos.coords.latitude, pos.coords.longitude);
-      },
-      err => {
-        updateStatus('Erreur géolocalisation: ' + err.message);
-      },
-      {
-        enableHighAccuracy: true,
-        maximumAge: 1000,
-        timeout: 5000
+    stopBtn.onclick = () => {
+      const callsign = callsignInput.value.trim().toUpperCase();
+      if (!callsign) return;
+
+      if (watchId) {
+        navigator.geolocation.clearWatch(watchId);
+        watchId = null;
       }
-    );
-    sharing = true;
-    btn.textContent = 'Arrêter le partage';
-    updateStatus('Partage démarré...');
-  } else {
-    // Arrêter le partage
-    stopSharing();
-    sharing = false;
-    btn.textContent = 'Démarrer le partage';
-  }
-});
-</script>
 
+      db.ref("positions/" + callsign).update({
+        stopped: true,
+        lastUpdate: Date.now()
+      });
+
+      startBtn.style.display = "inline-block";
+      stopBtn.style.display = "none";
+    };
+  </script>
 </body>
 </html>
