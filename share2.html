@@ -37,6 +37,20 @@
   margin-top: 10px;
   gap: 5px;
 }
+#indicateurs {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  border: 1px solid lime;
+  padding: 10px;
+  width: 90vw;
+  max-width: 400px;
+  font-size: 16px;
+}
+#indicateurs span {
+  color: red;
+  font-weight: bold;
+}
 
     @keyframes blink {
       0% {opacity: 1;}
@@ -49,6 +63,12 @@
   <input type="text" id="callsign" placeholder="Callsign" />
   <button id="startBtn">Démarrer</button>
   <button id="stopBtn" style="display:none;">Arrêter</button>
+  <div id="indicateurs">
+  <div>Pitch: <span id="pitchVal">0</span>°</div>
+  <div>Vitesse verticale: <span id="vsVal">0</span> m/s</div>
+  <div>Vitesse horizontale: <span id="speedVal">0</span> km/h</div>
+  <div>Altitude: <span id="altVal">0</span> m</div>
+</div>
 
   <div id="gpwsAlert"></div>
 
@@ -269,6 +289,12 @@ sounds.stall.play().then(() => {
         data.verticalSpeed = verticalSpeed;
 
         checkGPWS(data);
+        // MAJ visuels indicateurs
+document.getElementById("pitchVal").innerText = pitch.toFixed(1);
+document.getElementById("vsVal").innerText = verticalSpeed.toFixed(1);
+document.getElementById("speedVal").innerText = (data.speed || 0).toFixed(1);
+document.getElementById("altVal").innerText = (altitude || 0).toFixed(1);
+
       });
     };
 
