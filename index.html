@@ -54,23 +54,38 @@
       z-index: 1000;
     }
     #chatInput {
-      width: 200px;
+      width: 240px;
       background: black;
       color: lime;
       border: 1px solid lime;
       padding: 2px;
       margin-top: 5px;
     }
-    #sendBtn, #atcBtn {
+    #sendBtn {
       background: black;
       color: lime;
       border: 1px solid lime;
       padding: 2px 6px;
-      margin-left: 2px;
     }
-    .atc-msg {
-      color: red;
-      font-weight: bold;
+    #transponder {
+      position: absolute;
+      bottom: 10px;
+      right: 10px;
+      background: black;
+      border: 1px solid lime;
+      color: lime;
+      padding: 10px;
+      display: none;
+      z-index: 1000;
+    }
+    .transponder-btn {
+      width: 40px;
+      height: 40px;
+      margin: 2px;
+      font-size: 16px;
+      background: black;
+      color: lime;
+      border: 1px solid lime;
     }
   </style>
 </head>
@@ -81,13 +96,12 @@
     <div id="chatMessages"></div>
     <input type="text" id="chatInput" placeholder="Message..." />
     <button id="sendBtn">Envoyer</button>
-    <button id="atcBtn">ATC</button>
   </div>
+  <div id="transponder"></div>
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
-
   <script>
     const firebaseConfig = {
       apiKey: "AIzaSyABEP_KAW9R4dYpnDS9BANn6vcQCICxzrU",
@@ -110,6 +124,39 @@
     }).addTo(map);
 
     const aircrafts = {};
+    const audio = new Audio("https://files.catbox.moe/8sf0qz.mp3"); // fallback MP3 for alarm
+    audio.loop = true;
+    let selectedCallsign = null;
+
+    function showTransponder(callsign) {
+      const pad = document.getElementById('transponder');
+      pad.innerHTML = '';
+      let input = '';
+      const display = document.createElement('div');
+      display.textContent = '----';
+      display.style.marginBottom = '5px';
+      pad.appendChild(display);
+      for (let i = 0; i <= 9; i++) {
+        const btn = document.createElement('button');
+        btn.textContent = i;
+        btn.className = 'transponder-btn';
+        btn.onclick = () => {
+          input += i;
+          display.textContent = input.padStart(4, '-');
+          if (input.length === 4) {
+            let emergency = input === '7700';
+            if (input === '1000') emergency = false;
+            db.ref(`positions/${callsign}`).update({
+              emergency,
+              transponder: input
+            });
+            pad.style.display = 'none';
+          }
+        };
+        pad.appendChild(btn);
+      }
+      pad.style.display = 'block';
+    }
 
     function updateAircrafts(snapshot) {
       const now = Date.now();
@@ -126,7 +173,7 @@
         const color = emergency ? 'orange' : (stopped ? 'red' : 'blue');
         const icon = L.divIcon({
           className: '',
-          html: `<div style="width: 10px; height: 10px; background: ${color}; border-radius: 50%;"></div>`
+          html: `<div style="font-size: 18px; color: ${color}; animation: ${emergency ? 'blinker 1s linear infinite' : 'none'}">●</div>`
         });
         if (!aircrafts[callsign]) {
           const marker = L.marker([lat, lon], { icon }).addTo(map);
@@ -140,9 +187,8 @@
           const group = L.layerGroup([marker, label]);
           group.addTo(map);
           marker.on('click', () => {
-            if (confirm(`Envoyer un signal d'urgence pour ${callsign} ?`)) {
-              db.ref(`positions/${callsign}/emergency`).set(!emergency);
-            }
+            selectedCallsign = callsign;
+            showTransponder(callsign);
           });
           aircrafts[callsign] = { marker, label, group };
         } else {
@@ -154,6 +200,12 @@
             html: `${callsign}<br><span class="info-label">${Math.round(altitude || 0)}m | ${Math.round(speed)}km/h</span>`
           }));
         }
+
+        if (emergency) {
+          if (audio.paused) audio.play();
+        } else {
+          if (!Object.values(snapshot).some(d => d.emergency)) audio.pause();
+        }
       }
     }
 
@@ -161,6 +213,7 @@
       updateAircrafts(snap.val() || {});
     });
 
+    // WebRTC (multi-user audio)
     const micBtn = document.getElementById("micBtn");
     const peers = {};
     let localStream;
@@ -169,6 +222,7 @@
       localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
       const myId = Math.random().toString(36).substring(2);
       const ref = db.ref("radio/" + myId);
+
       ref.onDisconnect().remove();
       ref.set({ online: true });
 
@@ -199,14 +253,14 @@
       await pc.setLocalDescription(offer);
       db.ref(`signals/${peerId}/offer`).set(JSON.stringify(offer));
 
-      db.ref(`signals/${myId}/answer`).on("value", async snap => {
+      db.ref(`signals/${peerId}/answer`).on("value", async snap => {
         if (snap.exists()) {
           const answer = JSON.parse(snap.val());
           await pc.setRemoteDescription(new RTCSessionDescription(answer));
         }
       });
 
-      db.ref(`signals/${myId}/candidates`).on("child_added", snap => {
+      db.ref(`signals/${peerId}/candidates`).on("child_added", snap => {
         const candidate = JSON.parse(snap.val());
         pc.addIceCandidate(new RTCIceCandidate(candidate));
       });
@@ -220,40 +274,31 @@
       startAudio();
     });
 
+    // Chat
     const chatInput = document.getElementById("chatInput");
     const sendBtn = document.getElementById("sendBtn");
-    const atcBtn = document.getElementById("atcBtn");
     const chatMessages = document.getElementById("chatMessages");
 
     sendBtn.addEventListener("click", () => {
       const text = chatInput.value.trim();
       if (text) {
-        db.ref("ATC").push({ text, time: Date.now(), atc: false });
+        db.ref("ATC").push({ text, time: Date.now() });
         chatInput.value = "";
       }
     });
 
-    atcBtn.addEventListener("click", () => {
-      const text = chatInput.value.trim();
-      if (text) {
-        const pass = prompt("Mot de passe ATC ?");
-        if (pass === "ATC340") {
-          db.ref("ATC").push({ text, time: Date.now(), atc: true });
-          chatInput.value = "";
-        } else {
-          alert("Mot de passe incorrect.");
-        }
-      }
-    });
-
     db.ref("ATC").limitToLast(20).on("child_added", snap => {
-      const { text, atc } = snap.val();
+      const { text } = snap.val();
       const div = document.createElement("div");
       div.textContent = text;
-      if (atc) div.classList.add("atc-msg");
       chatMessages.appendChild(div);
       chatMessages.scrollTop = chatMessages.scrollHeight;
     });
   </script>
+  <style>
+    @keyframes blinker {
+      50% { opacity: 0; }
+    }
+  </style>
 </body>
 </html>
