@@ -1,267 +1,101 @@
 <!DOCTYPE html>
 <html lang="fr">
 <head>
-  <meta charset="UTF-8">
-  <title>Radio Numérique</title>
-  <link href="https://fonts.cdnfonts.com/css/digital-7-mono" rel="stylesheet">
-  <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-auth.js"></script>
-  <style>
-    body {
-      margin: 0;
-      background-color: #222;
-      color: white;
-      font-family: 'Digital-7 Mono', monospace;
-      padding: 20px;
-    }
-    .top-bar {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-bottom: 20px;
-    }
-    .codepad {
-      display: none;
-      flex-direction: column;
-      margin-top: 10px;
-    }
-    .codepad input {
-      font-size: 2em;
-      padding: 10px;
-      text-align: center;
-      width: 100px;
-    }
-    .codepad button {
-      margin-top: 10px;
-      padding: 10px;
-      background-color: green;
-      color: white;
-      border: none;
-      cursor: pointer;
-    }
-    #micBtn {
-      background-color: #444;
-      color: white;
-      border: none;
-      padding: 10px 20px;
-      font-size: 18px;
-      cursor: pointer;
-      margin-top: 20px;
-    }
-    #freqDisplay {
-      font-size: 2em;
-      margin-top: 20px;
-      text-align: center;
-    }
-    #freqInput {
-      font-size: 2em;
-      width: 150px;
-      text-align: center;
-      margin-top: 10px;
-    }
-    #freqBtn {
-      margin-top: 10px;
-      padding: 10px;
-      background-color: blue;
-      color: white;
-      border: none;
-      cursor: pointer;
-      font-size: 16px;
-    }
-  </style>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Radar des Positions</title>
+<link
+  rel="stylesheet"
+  href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+/>
+<style>
+  body, html { margin: 0; padding: 0; height: 100%; }
+  #map { height: 100vh; width: 100vw; }
+  #btn-share {
+    position: absolute;
+    top: 10px; right: 10px;
+    padding: 10px 20px;
+    background: #007bff; color: white;
+    border: none; border-radius: 5px;
+    cursor: pointer;
+    font-size: 16px;
+    z-index: 1000;
+  }
+</style>
 </head>
 <body>
-  <div class="top-bar">
-    <h1>Radio Numérique</h1>
-    <button id="listBtn" onclick="window.location.href='list.html'">Liste</button>
-  </div>
 
-  <div id="freqDisplay">Fréquence : 00000</div>
-  <input id="freqInput" type="text" maxlength="5" placeholder="Entrez fréquence">
-  <button id="freqBtn" onclick="setFrequency()">Changer</button>
+<button id="btn-share">Partager ma position</button>
+<div id="map"></div>
 
-  <div id="main"></div>
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-database-compat.js"></script>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
-  <button id="micBtn" onclick="handleMicClick()">🎤 Micro</button>
+<script>
+// TODO: Remplace cette config par ta config Firebase !
+// For Firebase JS SDK v7.20.0 and later, measurementId is optional
+const firebaseConfig = {
+  apiKey: "AIzaSyABEP_KAW9R4dYpnDS9BANn6vcQCICxzrU",
+  authDomain: "kenzomc-ad1c2.firebaseapp.com",
+  databaseURL: "https://kenzomc-ad1c2-default-rtdb.firebaseio.com",
+  projectId: "kenzomc-ad1c2",
+  storageBucket: "kenzomc-ad1c2.firebasestorage.app",
+  messagingSenderId: "459457032331",
+  appId: "1:459457032331:web:af7e0d8c958a807ce2648e",
+  measurementId: "G-341YD1GPC5"
+};
 
-  <div id="codepad" class="codepad">
-    <input id="accessCode" type="text" maxlength="4" placeholder="Code">
-    <button onclick="verifyCode()">Valider</button>
-  </div>
+firebase.initializeApp(firebaseConfig);
+const db = firebase.database();
 
-  <script>
-    const firebaseConfig = {
-      apiKey: "AIzaSyABEP_KAW9R4dYpnDS9BANn6vcQCICxzrU",
-      authDomain: "kenzomc-ad1c2.firebaseapp.com",
-      databaseURL: "https://kenzomc-ad1c2-default-rtdb.firebaseio.com",
-      projectId: "kenzomc-ad1c2",
-      storageBucket: "kenzomc-ad1c2.appspot.com",
-      messagingSenderId: "459457032331",
-      appId: "1:459457032331:web:af7e0d8c958a807ce2648e",
-      measurementId: "G-341YD1GPC5"
-    };
-    firebase.initializeApp(firebaseConfig);
-    const db = firebase.database();
+const map = L.map('map').setView([48.8566, 2.3522], 12); // Paris par défaut
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+  attribution: '© OpenStreetMap contributors'
+}).addTo(map);
 
-    const userId = localStorage.getItem('userId') || `user-${Date.now()}`;
-    localStorage.setItem('userId', userId);
-    const pseudo = localStorage.getItem('pseudo') || `Invité-${Math.floor(Math.random()*1000)}`;
+const markers = {};
 
-    let currentFreqKey = null;
-    let micEnabled = false;
-    let accessGranted = false;
-    let stream = null;
+// Fonction pour afficher/mettre à jour un marker
+function updateMarker(callsign, lat, lon) {
+  if (markers[callsign]) {
+    markers[callsign].setLatLng([lat, lon]);
+  } else {
+    const marker = L.circleMarker([lat, lon], {
+      radius: 6,
+      color: 'blue',
+      fillColor: 'blue',
+      fillOpacity: 0.7
+    }).addTo(map);
+    marker.bindTooltip(callsign, {permanent: true, offset: [0, -12]});
+    markers[callsign] = marker;
+  }
+}
 
-    const peerConnections = {}; // gestion des connexions WebRTC
-    const servers = { iceServers: [{ urls: "stun:stun.l.google.com:19302" }] };
+// Écoute en temps réel des positions dans Firebase
+db.ref('positions').on('value', (snapshot) => {
+  const data = snapshot.val();
+  if (!data) return;
 
-    function joinFrequency(freqKey) {
-      leaveCurrentFrequency();
-      currentFreqKey = freqKey;
-      db.ref(`frequencies/${freqKey}/users/${userId}`).set({ name: pseudo });
-
-      if (freqKey === 'freq-00000') {
-        micEnabled = false;
-        accessGranted = false;
-      }
-      document.getElementById('freqDisplay').textContent = `Fréquence : ${freqKey.slice(-5)}`;
+  // Supprimer markers orphelins
+  for (const key in markers) {
+    if (!data[key]) {
+      map.removeLayer(markers[key]);
+      delete markers[key];
     }
+  }
 
-    function leaveCurrentFrequency() {
-      if (currentFreqKey) {
-        db.ref(`frequencies/${currentFreqKey}/users/${userId}`).remove();
-        db.ref(`frequencies/${currentFreqKey}/signals/${userId}`).remove();
-        for (let peerId in peerConnections) {
-          peerConnections[peerId].close();
-        }
-        Object.keys(peerConnections).forEach(k => delete peerConnections[k]);
-        currentFreqKey = null;
-      }
-    }
+  // Mettre à jour / ajouter markers
+  for (const callsign in data) {
+    const pos = data[callsign];
+    updateMarker(callsign, pos.lat, pos.lon);
+  }
+});
 
-    function verifyCode() {
-      const code = document.getElementById('accessCode').value;
-      if (code === '5395') {
-        accessGranted = true;
-        alert('Accès micro autorisé');
-        document.getElementById('codepad').style.display = 'none';
-      } else {
-        alert('Code incorrect.');
-      }
-    }
+document.getElementById('btn-share').addEventListener('click', () => {
+  window.location.href = 'share.html';
+});
+</script>
 
-    function handleMicClick() {
-      if (currentFreqKey === 'freq-00000') {
-        alert("Vous ne pouvez pas parler sur la fréquence de secours.");
-        toggleCodepad();
-        return;
-      }
-      if (!accessGranted) {
-        toggleCodepad();
-        return;
-      }
-      if (!micEnabled) {
-        navigator.mediaDevices.getUserMedia({ audio: true }).then(s => {
-          stream = s;
-          micEnabled = true;
-          document.getElementById('micBtn').style.backgroundColor = 'green';
-          connectToPeers();
-        }).catch(e => {
-          console.error("Erreur d'accès au micro", e);
-        });
-      } else {
-        if (stream) stream.getTracks().forEach(track => track.stop());
-        micEnabled = false;
-        document.getElementById('micBtn').style.backgroundColor = '#444';
-        leaveCurrentFrequency();
-        joinFrequency('freq-00000');
-      }
-    }
-
-    function toggleCodepad() {
-      const pad = document.getElementById('codepad');
-      pad.style.display = pad.style.display === 'flex' ? 'none' : 'flex';
-    }
-
-    function setFrequency() {
-      const input = document.getElementById('freqInput').value.trim();
-      if (!/^[0-9]{5}$/.test(input)) {
-        alert("Veuillez entrer une fréquence valide (5 chiffres).");
-        return;
-      }
-      joinFrequency(`freq-${input}`);
-    }
-
-    function connectToPeers() {
-      const signalsRef = db.ref(`frequencies/${currentFreqKey}/signals`);
-      signalsRef.on('child_added', snapshot => {
-        const fromId = snapshot.key;
-        const data = snapshot.val();
-
-        if (fromId === userId) return;
-
-        if (data.type === 'offer') {
-          const pc = new RTCPeerConnection(servers);
-          peerConnections[fromId] = pc;
-
-          stream.getTracks().forEach(track => pc.addTrack(track, stream));
-
-          pc.ontrack = event => {
-            const audio = new Audio();
-            audio.srcObject = event.streams[0];
-            audio.play();
-          };
-
-          pc.setRemoteDescription(new RTCSessionDescription(data.sdp)).then(() => {
-            return pc.createAnswer();
-          }).then(answer => {
-            return pc.setLocalDescription(answer);
-          }).then(() => {
-            db.ref(`frequencies/${currentFreqKey}/signals/${userId}`).set({
-              type: 'answer',
-              sdp: pc.localDescription
-            });
-          });
-        }
-        else if (data.type === 'answer' && peerConnections[fromId]) {
-          peerConnections[fromId].setRemoteDescription(new RTCSessionDescription(data.sdp));
-        }
-        else if (data.type === 'candidate' && peerConnections[fromId]) {
-          peerConnections[fromId].addIceCandidate(new RTCIceCandidate(data.candidate));
-        }
-      });
-
-      const pc = new RTCPeerConnection(servers);
-      peerConnections[userId] = pc;
-      stream.getTracks().forEach(track => pc.addTrack(track, stream));
-
-      pc.onicecandidate = event => {
-        if (event.candidate) {
-          db.ref(`frequencies/${currentFreqKey}/signals/${userId}`).set({
-            type: 'candidate',
-            candidate: event.candidate
-          });
-        }
-      };
-
-      pc.createOffer().then(offer => {
-        return pc.setLocalDescription(offer);
-      }).then(() => {
-        db.ref(`frequencies/${currentFreqKey}/signals/${userId}`).set({
-          type: 'offer',
-          sdp: pc.localDescription
-        });
-      });
-    }
-
-    document.addEventListener('DOMContentLoaded', () => {
-      joinFrequency('freq-00000');
-    });
-
-    window.addEventListener('beforeunload', () => {
-      leaveCurrentFrequency();
-    });
-  </script>
 </body>
 </html>
