@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Radar ATC - Carte des positions avec urgence</title>
+<title>Radar ATC - Carte des positions</title>
 
 <link
   rel="stylesheet"
@@ -19,7 +19,6 @@
   #map {
     height: 100vh;
   }
-  /* Style custom des markers */
   .custom-marker {
     text-align: center;
     pointer-events: auto;
@@ -41,8 +40,11 @@
     width: 12px;
     height: 12px;
     border-radius: 50%;
-    background-color: #0099ff; /* bleu par défaut */
     margin: 0 auto;
+  }
+  .custom-marker.normal .dot {
+    background-color: #0099ff; /* bleu normal */
+    animation: none;
   }
   .custom-marker.emergency .dot {
     background-color: orange;
@@ -56,7 +58,6 @@
     0%, 50%, 100% { opacity: 1; }
     25%, 75% { opacity: 0; }
   }
-  /* Popup bouton urgence */
   .emergency-btn {
     margin-top: 4px;
     background: #b35200;
@@ -98,8 +99,7 @@ const firebaseConfig = {
 firebase.initializeApp(firebaseConfig);
 const db = firebase.database();
 
-// Initialisation carte Leaflet
-const map = L.map('map').setView([48.8566, 2.3522], 12); // Paris par défaut
+const map = L.map('map').setView([48.8566, 2.3522], 12);
 
 L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
   attribution: '&copy; OpenStreetMap contributors &copy; CARTO',
@@ -107,14 +107,16 @@ L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
 }).addTo(map);
 
 const markers = {};
-const MAX_AGE_MS = 30000; // 30s max avant suppression
+const MAX_AGE_MS = 30000;
 
 let selectedCallsign = null;
 
-function createMarkerIcon(callsign, emergency = false, stopped = false) {
+function createMarkerIcon(callsign, stopped, emergency) {
   let classes = 'custom-marker';
-  if (emergency) classes += ' emergency';
   if (stopped) classes += ' stopped';
+  else if (emergency) classes += ' emergency';
+  else classes += ' normal';
+
   return L.divIcon({
     className: classes,
     html: `
@@ -128,12 +130,9 @@ function createMarkerIcon(callsign, emergency = false, stopped = false) {
 }
 
 function updateMarker(callsign, lat, lon, stopped = false, emergency = false) {
-  // Si stopped true, on force emergency à false côté affichage
-  if (stopped) emergency = false;
-
   let marker = markers[callsign];
   if (!marker) {
-    const icon = createMarkerIcon(callsign, emergency, stopped);
+    const icon = createMarkerIcon(callsign, stopped, emergency);
     marker = L.marker([lat, lon], { icon }).addTo(map);
     markers[callsign] = marker;
 
@@ -146,7 +145,7 @@ function updateMarker(callsign, lat, lon, stopped = false, emergency = false) {
     });
   } else {
     marker.setLatLng([lat, lon]);
-    const icon = createMarkerIcon(callsign, emergency, stopped);
+    const icon = createMarkerIcon(callsign, stopped, emergency);
     marker.setIcon(icon);
   }
 }
@@ -221,6 +220,7 @@ function fetchPositions() {
     for (const callsign in data) {
       const pos = data[callsign];
       if (pos.lastUpdate && (now - pos.lastUpdate <= MAX_AGE_MS || pos.stopped)) {
+        // Important: on passe bien les valeurs telles quelles, on n'écrase pas emergency si stopped.
         updateMarker(callsign, pos.lat, pos.lon, pos.stopped || false, pos.emergency || false);
       } else {
         removeMarker(callsign);
