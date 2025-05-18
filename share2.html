@@ -83,14 +83,14 @@
     let prevAltitude = null;
     let prevTime = null;
 
-    // Alarm URLs SoundCloud / Zapsplat
-    const alarms = {
-      stall: "https://soundcloud.com/darcy-gallagher-918811888/airbus-stall-warning",
-      sinkRate: "https://www.zapsplat.com/music/airliner-cockpit-ground-proximity-warning-system-gpws-voice-says-sink-rate/",
-      terrain: "https://soundcloud.com/james-lost-376224251/tupolev-tu-154-pull-up-alarm"
+    // Sons locaux (à placer dans le même dossier)
+    const sounds = {
+      stall: new Audio('stall.mp3'),     // Son décrochage
+      sinkRate: new Audio('sinkrate.mp3'), // Son sink rate
+      terrain: new Audio('terrain.mp3')    // Son terrain ahead
     };
 
-    // Cooldown en ms
+    // Cooldown en ms pour éviter répétition trop fréquente
     const alarmCooldown = 15000;
     let lastAlarmTime = {
       stall: 0,
@@ -98,23 +98,15 @@
       terrain: 0
     };
 
-    function playAlarm(url) {
-      // Pour SoundCloud, on doit utiliser un player iframe ou API dédiée
-      // Ici on va juste jouer un son générique car jouer direct un lien SC ne marche pas
-      // Alternativement, on peut héberger un mp3 direct ou utiliser un player tiers
-      // Pour la démo, on joue un bip simple (à remplacer par ton système audio)
-      console.log("Play alarm:", url);
-
-      // Pour jouer un son simple local ou une URL mp3 directe, tu peux faire :
-      /*
-      const audio = new Audio(url);
-      audio.play();
-      */
-      // Mais SoundCloud ne permet pas ça directement via URL publique.
-
-      // Solution simple ici : afficher message et demander à l'utilisateur d'ouvrir le lien.
-      alert("ALERTE GPWS\nCliquez OK pour écouter l'alarme:\n" + url);
-      window.open(url, "_blank");
+    function playAlarm(type) {
+      if (sounds[type]) {
+        try {
+          sounds[type].currentTime = 0;
+          sounds[type].play();
+        } catch (e) {
+          console.warn("Erreur lecture son:", e);
+        }
+      }
     }
 
     function showAlert(message) {
@@ -125,20 +117,25 @@
       }, 5000);
     }
 
+    // Simulation pitch (à ajuster si tu as la donnée)
+    // Ici on fixe pitch = 15° quand speed < 120 pour test stall
+    function simulatePitch(speed) {
+      return speed < 120 ? 15 : 0;
+    }
+
     // Fonction GPWS
     function checkGPWS(data) {
       const now = Date.now();
 
-      // Pitch simulé: pas dispo, on met 0
-      const pitch = data.pitch || 0;
+      const pitch = data.pitch || simulatePitch(data.speed || 0);
       const speed = data.speed || 0; // km/h
       const altitude = data.altitude || 0; // m
       const verticalSpeed = data.verticalSpeed || 0; // m/s
 
-      // Décrochage (stall): pitch > 10° & vitesse < 120 km/h (exemple)
+      // Décrochage (stall): pitch > 10° & vitesse < 120 km/h
       if (pitch > 10 && speed < 120) {
         if (now - lastAlarmTime.stall > alarmCooldown) {
-          playAlarm(alarms.stall);
+          playAlarm('stall');
           lastAlarmTime.stall = now;
           showAlert("STALL WARNING - Décrochage détecté !");
         }
@@ -147,7 +144,7 @@
       // Sink rate: descente rapide > 10 m/s
       if (verticalSpeed < -10) {
         if (now - lastAlarmTime.sinkRate > alarmCooldown) {
-          playAlarm(alarms.sinkRate);
+          playAlarm('sinkRate');
           lastAlarmTime.sinkRate = now;
           showAlert("SINK RATE! Sink rate!");
         }
@@ -156,7 +153,7 @@
       // Terrain ahead: altitude < 160m
       if (altitude < 160) {
         if (now - lastAlarmTime.terrain > alarmCooldown) {
-          playAlarm(alarms.terrain);
+          playAlarm('terrain');
           lastAlarmTime.terrain = now;
           showAlert("TERRAIN AHEAD! Pull up! Pull up! Pull up!");
         }
@@ -169,6 +166,10 @@
 
       startBtn.style.display = "none";
       stopBtn.style.display = "inline-block";
+
+      // Déclenche un son silencieux pour débloquer autoplay audio
+      // (certains navigateurs exigent interaction avant son)
+      sounds.stall.play().then(() => sounds.stall.pause()).catch(() => {});
 
       watchId = navigator.geolocation.watchPosition(
         pos => {
@@ -224,7 +225,7 @@
         prevTime = data.lastUpdate || Date.now();
 
         data.verticalSpeed = verticalSpeed;
-        data.pitch = 0; // Pas dispo, à ajuster si tu as la valeur
+        data.pitch = simulatePitch(data.speed || 0);
 
         checkGPWS(data);
       });
@@ -249,8 +250,7 @@
 
       // Supprime l'écoute Firebase
       db.ref("positions/" + callsign).off();
-      
-      // Reset alert & vars
+
       gpwsAlert.style.display = "none";
       prevAltitude = null;
       prevTime = null;
