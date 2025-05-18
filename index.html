@@ -122,35 +122,33 @@ addGrid(map);
 const markers = {};
 const MAX_AGE_MS = 30 * 1000; // 30 secondes
 
-function updateMarker(callsign, lat, lon) {
-  if (markers[callsign]) {
-    markers[callsign].marker.setLatLng([lat, lon]);
-    markers[callsign].label.setLatLng([lat, lon]);
+function updateMarker(callsign, lat, lon, stopped = false) {
+  let marker = markers[callsign];
+  if (!marker) {
+    // création du marker avec un div icon
+    const icon = L.divIcon({
+      className: 'custom-marker',
+      html: `<div class="callsign-label">${callsign}</div><div class="dot"></div>`,
+      iconSize: [40, 40],
+      iconAnchor: [20, 20]
+    });
+    marker = L.marker([lat, lon], { icon }).addTo(map);
+    markers[callsign] = marker;
   } else {
-    // Cercle sans contour
-    const marker = L.circleMarker([lat, lon], {
-      radius: 6,
-      color: '#00ff00',
-      fillColor: '#00ff00',
-      fillOpacity: 0.8,
-      weight: 0,
-      stroke: false
-    }).addTo(map);
+    marker.setLatLng([lat, lon]);
+  }
 
-    // Label au-dessus avec DivIcon, style custom
-    const label = L.marker([lat, lon], {
-      icon: L.divIcon({
-        className: 'callsign-label-no-tooltip',
-        html: callsign.toUpperCase(),
-        iconSize: [100, 20],
-        iconAnchor: [50, 20]
-      }),
-      interactive: false
-    }).addTo(map);
-
-    markers[callsign] = { marker, label };
+  // Mise à jour du style selon stopped
+  const el = marker.getElement();
+  if (el) {
+    if (stopped) {
+      el.querySelector('.dot').style.backgroundColor = 'red';
+    } else {
+      el.querySelector('.dot').style.backgroundColor = '#0099ff';
+    }
   }
 }
+
 
 // Écoute en temps réel sur Firebase
 db.ref('positions').on('value', snapshot => {
