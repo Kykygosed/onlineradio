@@ -3,23 +3,53 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Radar des Positions</title>
+<title>Radar ATC - Positions</title>
+
 <link
   rel="stylesheet"
   href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
 />
+
 <style>
-  body, html { margin: 0; padding: 0; height: 100%; }
-  #map { height: 100vh; width: 100vw; }
+  html, body {
+    height: 100%;
+    margin: 0;
+    background: black;
+    color: #0f0;
+    font-family: monospace, monospace;
+    user-select: none;
+  }
+  #map {
+    height: 100vh;
+    width: 100vw;
+  }
   #btn-share {
     position: absolute;
     top: 10px; right: 10px;
     padding: 10px 20px;
-    background: #007bff; color: white;
-    border: none; border-radius: 5px;
+    background: #006400; /* dark green */
+    color: #0f0;
+    border: 2px solid #0f0;
+    border-radius: 5px;
     cursor: pointer;
+    font-weight: bold;
     font-size: 16px;
     z-index: 1000;
+    text-shadow:
+      -1px -1px 0 #000,
+      1px -1px 0 #000,
+      -1px 1px 0 #000,
+      1px 1px 0 #000;
+  }
+  .callsign-label {
+    color: #00ff00;
+    font-weight: bold;
+    font-family: monospace;
+    text-shadow:
+      -1px -1px 2px #000,
+      1px -1px 2px #000,
+      -1px 1px 2px #000,
+      1px 1px 2px #000;
   }
 </style>
 </head>
@@ -33,8 +63,7 @@
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
 <script>
-// TODO: Remplace cette config par ta config Firebase !
-// For Firebase JS SDK v7.20.0 and later, measurementId is optional
+// Ta config Firebase
 const firebaseConfig = {
   apiKey: "AIzaSyABEP_KAW9R4dYpnDS9BANn6vcQCICxzrU",
   authDomain: "kenzomc-ad1c2.firebaseapp.com",
@@ -49,35 +78,72 @@ const firebaseConfig = {
 firebase.initializeApp(firebaseConfig);
 const db = firebase.database();
 
-const map = L.map('map').setView([48.8566, 2.3522], 12); // Paris par défaut
-L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-  attribution: '© OpenStreetMap contributors'
+const map = L.map('map').setView([48.8566, 2.3522], 12); // Centré sur Paris
+
+// Carte sombre style ATC
+L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+  attribution: '&copy; OpenStreetMap contributors &copy; CARTO',
+  maxZoom: 19
 }).addTo(map);
+
+// Ajout d'une grille verte légère
+function addGrid(map) {
+  const latMin = 48.7;
+  const latMax = 49.0;
+  const lonMin = 2.2;
+  const lonMax = 2.6;
+  const step = 0.01;
+
+  for(let lat = latMin; lat <= latMax; lat += step) {
+    L.polyline([[lat, lonMin], [lat, lonMax]], {
+      color: '#00ff00',
+      weight: 1,
+      opacity: 0.15,
+      interactive: false
+    }).addTo(map);
+  }
+
+  for(let lon = lonMin; lon <= lonMax; lon += step) {
+    L.polyline([[latMin, lon], [latMax, lon]], {
+      color: '#00ff00',
+      weight: 1,
+      opacity: 0.15,
+      interactive: false
+    }).addTo(map);
+  }
+}
+addGrid(map);
 
 const markers = {};
 
-// Fonction pour afficher/mettre à jour un marker
+// Mise à jour ou création d'un marker vert fluo avec callsign
 function updateMarker(callsign, lat, lon) {
   if (markers[callsign]) {
     markers[callsign].setLatLng([lat, lon]);
   } else {
     const marker = L.circleMarker([lat, lon], {
       radius: 6,
-      color: 'blue',
-      fillColor: 'blue',
-      fillOpacity: 0.7
+      color: '#00ff00',
+      fillColor: '#00ff00',
+      fillOpacity: 0.8,
+      weight: 2
     }).addTo(map);
-    marker.bindTooltip(callsign, {permanent: true, offset: [0, -12]});
+    marker.bindTooltip(callsign, {
+      permanent: true,
+      offset: [0, -12],
+      direction: 'top',
+      className: 'callsign-label'
+    });
     markers[callsign] = marker;
   }
 }
 
-// Écoute en temps réel des positions dans Firebase
-db.ref('positions').on('value', (snapshot) => {
+// Écoute en temps réel des positions sur Firebase
+db.ref('positions').on('value', snapshot => {
   const data = snapshot.val();
   if (!data) return;
 
-  // Supprimer markers orphelins
+  // Supprime les markers absents
   for (const key in markers) {
     if (!data[key]) {
       map.removeLayer(markers[key]);
@@ -85,7 +151,7 @@ db.ref('positions').on('value', (snapshot) => {
     }
   }
 
-  // Mettre à jour / ajouter markers
+  // Met à jour / ajoute les markers
   for (const callsign in data) {
     const pos = data[callsign];
     updateMarker(callsign, pos.lat, pos.lon);
