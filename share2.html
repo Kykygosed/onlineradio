@@ -82,6 +82,13 @@
 
     let prevAltitude = null;
     let prevTime = null;
+    let devicePitch = 0;
+
+window.addEventListener("deviceorientation", event => {
+  if (event.beta !== null) {
+    devicePitch = event.beta; // Inclinaison avant/arrière en degrés
+  }
+});
 
     // Sons locaux (à placer dans le même dossier)
     const sounds = {
@@ -119,15 +126,13 @@
 
     // Simulation pitch (à ajuster si tu as la donnée)
     // Ici on fixe pitch = 15° quand speed < 120 pour test stall
-    function simulatePitch(speed) {
-      return speed < 120 ? 15 : 0;
-    }
+
 
     // Fonction GPWS
     function checkGPWS(data) {
       const now = Date.now();
 
-      const pitch = data.pitch || simulatePitch(data.speed || 0);
+      const pitch = data.pitch = devicePitch;
       const speed = data.speed || 0; // km/h
       const altitude = data.altitude || 0; // m
       const verticalSpeed = data.verticalSpeed || 0; // m/s
@@ -225,7 +230,6 @@
         prevTime = data.lastUpdate || Date.now();
 
         data.verticalSpeed = verticalSpeed;
-        data.pitch = simulatePitch(data.speed || 0);
 
         checkGPWS(data);
       });
