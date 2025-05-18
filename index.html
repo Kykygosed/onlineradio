@@ -54,18 +54,23 @@
       z-index: 1000;
     }
     #chatInput {
-      width: 240px;
+      width: 200px;
       background: black;
       color: lime;
       border: 1px solid lime;
       padding: 2px;
       margin-top: 5px;
     }
-    #sendBtn {
+    #sendBtn, #atcBtn {
       background: black;
       color: lime;
       border: 1px solid lime;
       padding: 2px 6px;
+      margin-left: 2px;
+    }
+    .atc-msg {
+      color: red;
+      font-weight: bold;
     }
   </style>
 </head>
@@ -76,6 +81,7 @@
     <div id="chatMessages"></div>
     <input type="text" id="chatInput" placeholder="Message..." />
     <button id="sendBtn">Envoyer</button>
+    <button id="atcBtn">ATC</button>
   </div>
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -117,10 +123,10 @@
           }
           continue;
         }
-        const color = emergency ? 'orange' : (stopped ? 'red' : 'lime');
+        const color = emergency ? 'orange' : (stopped ? 'red' : 'blue');
         const icon = L.divIcon({
           className: '',
-          html: `<div style="transform: rotate(${heading}deg); font-size: 18px; color: ${color};">&#9992;</div>`
+          html: `<div style="width: 10px; height: 10px; background: ${color}; border-radius: 50%;"></div>`
         });
         if (!aircrafts[callsign]) {
           const marker = L.marker([lat, lon], { icon }).addTo(map);
@@ -155,7 +161,6 @@
       updateAircrafts(snap.val() || {});
     });
 
-    // WebRTC (multi-user audio)
     const micBtn = document.getElementById("micBtn");
     const peers = {};
     let localStream;
@@ -164,7 +169,6 @@
       localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
       const myId = Math.random().toString(36).substring(2);
       const ref = db.ref("radio/" + myId);
-
       ref.onDisconnect().remove();
       ref.set({ online: true });
 
@@ -216,23 +220,37 @@
       startAudio();
     });
 
-    // Chat
     const chatInput = document.getElementById("chatInput");
     const sendBtn = document.getElementById("sendBtn");
+    const atcBtn = document.getElementById("atcBtn");
     const chatMessages = document.getElementById("chatMessages");
 
     sendBtn.addEventListener("click", () => {
       const text = chatInput.value.trim();
       if (text) {
-        db.ref("ATC").push({ text, time: Date.now() });
+        db.ref("ATC").push({ text, time: Date.now(), atc: false });
         chatInput.value = "";
       }
     });
 
+    atcBtn.addEventListener("click", () => {
+      const text = chatInput.value.trim();
+      if (text) {
+        const pass = prompt("Mot de passe ATC ?");
+        if (pass === "ATC340") {
+          db.ref("ATC").push({ text, time: Date.now(), atc: true });
+          chatInput.value = "";
+        } else {
+          alert("Mot de passe incorrect.");
+        }
+      }
+    });
+
     db.ref("ATC").limitToLast(20).on("child_added", snap => {
-      const { text } = snap.val();
+      const { text, atc } = snap.val();
       const div = document.createElement("div");
       div.textContent = text;
+      if (atc) div.classList.add("atc-msg");
       chatMessages.appendChild(div);
       chatMessages.scrollTop = chatMessages.scrollHeight;
     });
