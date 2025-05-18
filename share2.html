@@ -62,12 +62,14 @@
   <input type="text" id="callsign" placeholder="Callsign" />
   <button id="startBtn">Démarrer</button>
   <button id="stopBtn" style="display:none;">Arrêter</button>
+
   <div id="indicateurs">
     <div>Pitch: <span id="pitchVal">0</span>°</div>
     <div>Vitesse verticale: <span id="vsVal">0</span> m/s</div>
     <div>Vitesse horizontale: <span id="speedVal">0</span> km/h</div>
     <div>Altitude: <span id="altVal">0</span> m</div>
   </div>
+
   <div id="gpwsAlert"></div>
 
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
@@ -80,8 +82,7 @@
       projectId: "kenzomc-ad1c2",
       storageBucket: "kenzomc-ad1c2.appspot.com",
       messagingSenderId: "459457032331",
-      appId: "1:459457032331:web:af7e0d8c958a807ce2648e",
-      measurementId: "G-341YD1GPC5"
+      appId: "1:459457032331:web:af7e0d8c958a807ce2648e"
     };
     firebase.initializeApp(firebaseConfig);
     const db = firebase.database();
@@ -93,16 +94,15 @@
 
     let watchId = null;
     let lastLat = null, lastLon = null, lastTime = null;
-    let prevAltitude = null;
-    let prevTime = null;
+    let prevAltitude = null, prevTime = null;
     let devicePitch = 0;
+    let gpwsInterval = null;
 
     const sounds = {
       stall: new Audio('stall.mp3'),
       sinkRate: new Audio('sinkrate.mp3'),
       terrain: new Audio('terrain.mp3')
     };
-
     const alarmCooldown = 1000;
     let lastAlarmTime = { stall: 0, sinkRate: 0, terrain: 0 };
 
@@ -128,41 +128,30 @@
       div.style.textAlign = "center";
       div.style.fontWeight = "bold";
       gpwsAlert.appendChild(div);
-
-      setTimeout(() => {
-        gpwsAlert.removeChild(div);
-      }, 5000);
+      setTimeout(() => gpwsAlert.removeChild(div), 5000);
     }
 
     function checkGPWS(data) {
       const now = Date.now();
-      const pitch = data.pitch = devicePitch;
+      const pitch = devicePitch;
       const speed = data.speed || 0;
       const altitude = typeof data.altitude === 'number' ? data.altitude : 9999;
       const verticalSpeed = data.verticalSpeed || 0;
 
-      if (pitch > 10 && speed > 10 && speed < 120) {
-        if (now - lastAlarmTime.stall > alarmCooldown) {
-          playAlarm('stall');
-          lastAlarmTime.stall = now;
-          showAlert("STALL WARNING - Décrochage détecté !");
-        }
+      if (pitch > 10 && speed > 10 && speed < 120 && now - lastAlarmTime.stall > alarmCooldown) {
+        playAlarm('stall');
+        lastAlarmTime.stall = now;
+        showAlert("STALL WARNING - Décrochage détecté !");
       }
-
-      if (verticalSpeed < -10) {
-        if (now - lastAlarmTime.sinkRate > alarmCooldown) {
-          playAlarm('sinkRate');
-          lastAlarmTime.sinkRate = now;
-          showAlert("SINK RATE! Sink rate!");
-        }
+      if (verticalSpeed < -10 && now - lastAlarmTime.sinkRate > alarmCooldown) {
+        playAlarm('sinkRate');
+        lastAlarmTime.sinkRate = now;
+        showAlert("SINK RATE! Sink rate!");
       }
-
-      if (altitude < 160) {
-        if (now - lastAlarmTime.terrain > alarmCooldown) {
-          playAlarm('terrain');
-          lastAlarmTime.terrain = now;
-          showAlert("TERRAIN AHEAD! Pull up! Pull up! Pull up!");
-        }
+      if (altitude < 160 && now - lastAlarmTime.terrain > alarmCooldown) {
+        playAlarm('terrain');
+        lastAlarmTime.terrain = now;
+        showAlert("TERRAIN AHEAD! Pull up! Pull up!");
       }
     }
 
@@ -171,51 +160,35 @@
       if (!callsign) return alert("Entrez un callsign.");
 
       if (typeof DeviceOrientationEvent?.requestPermission === 'function') {
-        DeviceOrientationEvent.requestPermission()
-          .then(state => {
-            if (state === 'granted') {
-              window.addEventListener("deviceorientation", event => {
-                if (event.beta !== null) {
-                  devicePitch = event.beta;
-                }
-              });
-            } else {
-              alert("Autorisation capteurs refusée. Le GPWS ne fonctionnera pas.");
-            }
-          })
-          .catch(err => {
-            alert("Erreur permission capteurs : " + err);
-          });
-      } else {
-        window.addEventListener("deviceorientation", event => {
-          if (event.beta !== null) {
-            devicePitch = event.beta;
+        DeviceOrientationEvent.requestPermission().then(state => {
+          if (state === 'granted') {
+            window.addEventListener("deviceorientation", e => {
+              if (e.beta !== null) devicePitch = e.beta;
+            });
+          } else {
+            alert("Autorisation capteurs refusée.");
           }
+        });
+      } else {
+        window.addEventListener("deviceorientation", e => {
+          if (e.beta !== null) devicePitch = e.beta;
         });
       }
 
+      sounds.stall.play().then(() => sounds.stall.pause()).catch(() => {});
       startBtn.style.display = "none";
       stopBtn.style.display = "inline-block";
-
-      sounds.stall.volume = 0;
-      sounds.stall.play().then(() => {
-        sounds.stall.pause();
-        sounds.stall.currentTime = 0;
-        sounds.stall.volume = 1;
-      }).catch(() => {});
 
       watchId = navigator.geolocation.watchPosition(
         pos => {
           const { latitude, longitude, altitude } = pos.coords;
           const now = Date.now();
 
-          let heading = 0;
-          let speed = 0;
-
+          let heading = 0, speed = 0;
           if (lastLat !== null && lastLon !== null && lastTime !== null) {
             const dLat = latitude - lastLat;
             const dLon = longitude - lastLon;
-            const dist = Math.sqrt(dLat * dLat + dLon * dLon) * 111000;
+            const dist = Math.sqrt(dLat**2 + dLon**2) * 111000;
             const dt = (now - lastTime) / 1000;
             speed = (dist / dt) * 3.6;
             heading = Math.atan2(dLon, dLat) * (180 / Math.PI);
@@ -229,7 +202,7 @@
           db.ref("positions/" + callsign).set({
             lat: latitude,
             lon: longitude,
-            altitude: altitude || null,
+            altitude: altitude || 0,
             speed: speed,
             heading: heading,
             lastUpdate: now,
@@ -238,43 +211,41 @@
           });
         },
         err => alert("Erreur GPS : " + err.message),
-        { enableHighAccuracy: true }
+        { enableHighAccuracy: true, maximumAge: 0, timeout: 2000 }
       );
 
-      db.ref("positions/" + callsign).on("value", snapshot => {
-        const data = snapshot.val();
-        if (!data) return;
+      gpwsInterval = setInterval(() => {
+        db.ref("positions/" + callsign).once("value").then(snapshot => {
+          const data = snapshot.val();
+          if (!data) return;
 
-        if (prevAltitude === null) prevAltitude = data.altitude || 0;
-        if (prevTime === null) prevTime = data.lastUpdate || Date.now();
+          if (prevAltitude === null) prevAltitude = data.altitude || 0;
+          if (prevTime === null) prevTime = data.lastUpdate || Date.now();
 
-        const dt = (data.lastUpdate || Date.now()) - prevTime;
-        const dz = (data.altitude || 0) - prevAltitude;
+          const dt = (data.lastUpdate || Date.now()) - prevTime;
+          const dz = (data.altitude || 0) - prevAltitude;
+          const verticalSpeed = dt > 0 ? (dz / (dt / 1000)) : 0;
 
-        const verticalSpeed = dt > 0 ? (dz / (dt / 1000)) : 0;
+          prevAltitude = data.altitude || 0;
+          prevTime = data.lastUpdate || Date.now();
 
-        prevAltitude = data.altitude || 0;
-        prevTime = data.lastUpdate || Date.now();
+          data.verticalSpeed = verticalSpeed;
 
-        data.verticalSpeed = verticalSpeed;
+          checkGPWS(data);
 
-        checkGPWS(data);
-
-        document.getElementById("pitchVal").innerText = devicePitch.toFixed(1);
-        document.getElementById("vsVal").innerText = verticalSpeed.toFixed(1);
-        document.getElementById("speedVal").innerText = (data.speed || 0).toFixed(1);
-        document.getElementById("altVal").innerText = (data.altitude || 0).toFixed(1);
-      });
+          document.getElementById("pitchVal").innerText = devicePitch.toFixed(1);
+          document.getElementById("vsVal").innerText = verticalSpeed.toFixed(1);
+          document.getElementById("speedVal").innerText = (data.speed || 0).toFixed(1);
+          document.getElementById("altVal").innerText = (data.altitude || 0).toFixed(1);
+        });
+      }, 500);
     };
 
     stopBtn.onclick = () => {
       const callsign = callsignInput.value.trim().toUpperCase();
       if (!callsign) return;
-
-      if (watchId) {
-        navigator.geolocation.clearWatch(watchId);
-        watchId = null;
-      }
+      if (watchId) navigator.geolocation.clearWatch(watchId);
+      if (gpwsInterval) clearInterval(gpwsInterval);
 
       db.ref("positions/" + callsign).update({
         stopped: true,
@@ -283,9 +254,6 @@
 
       startBtn.style.display = "inline-block";
       stopBtn.style.display = "none";
-
-      db.ref("positions/" + callsign).off();
-
       gpwsAlert.style.display = "none";
       prevAltitude = null;
       prevTime = null;
