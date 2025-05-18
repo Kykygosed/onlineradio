@@ -81,27 +81,6 @@
     let prevTime = null;
     let devicePitch = 0;
 
-if (typeof DeviceOrientationEvent?.requestPermission === 'function') {
-  DeviceOrientationEvent.requestPermission()
-    .then(state => {
-      if (state === 'granted') {
-        window.addEventListener("deviceorientation", event => {
-          if (event.beta !== null) {
-            devicePitch = event.beta;
-          }
-        });
-      }
-    })
-    .catch(console.error);
-} else {
-  
-  // Navigateurs Android ou desktop qui ne demandent pas de permission
-  window.addEventListener("deviceorientation", event => {
-    if (event.beta !== null) {
-      devicePitch = event.beta;
-    }
-  });
-}
 
 
     // Sons locaux (à placer dans le même dossier)
@@ -192,7 +171,33 @@ function showAlert(message) {
     startBtn.onclick = () => {
       const callsign = callsignInput.value.trim().toUpperCase();
       if (!callsign) return alert("Entrez un callsign.");
+      // Demander la permission deviceorientation (iOS)
+if (typeof DeviceOrientationEvent?.requestPermission === 'function') {
+  DeviceOrientationEvent.requestPermission()
+    .then(state => {
+      if (state === 'granted') {
+        window.addEventListener("deviceorientation", event => {
+          if (event.beta !== null) {
+            devicePitch = event.beta;
+          }
+        });
+      } else {
+        alert("Autorisation capteurs refusée. Le GPWS ne fonctionnera pas.");
+      }
+    })
+    .catch(err => {
+      alert("Erreur permission capteurs : " + err);
+    });
+} else {
+  // Android ou desktop
+  window.addEventListener("deviceorientation", event => {
+    if (event.beta !== null) {
+      devicePitch = event.beta;
+    }
+  });
+}
 
+      
       startBtn.style.display = "none";
       stopBtn.style.display = "inline-block";
 
