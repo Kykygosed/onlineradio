@@ -3,235 +3,273 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Radar ATC - Carte des positions</title>
+<title>Radar ATC - Carte</title>
 
+<!-- Leaflet CSS -->
 <link
   rel="stylesheet"
   href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+  integrity="sha256-sA+e2PqM2Yd3gPQbXnIooUKD2yvzLxsc+Df52fS7u+k="
+  crossorigin=""
 />
+
 <style>
-  body, html {
-    margin: 0; padding: 0; height: 100%;
+  html, body, #map {
+    height: 100%;
+    margin: 0;
     background: black;
-    color: #0f0;
-    font-family: monospace;
+    font-family: monospace, monospace;
   }
+
   #map {
-    height: 100vh;
+    filter: contrast(0.7) brightness(0.7);
   }
+
   .custom-marker {
     text-align: center;
     pointer-events: auto;
     user-select: none;
-  }
-  .custom-marker .callsign-label {
+    color: #0f0;
     font-weight: bold;
     text-transform: uppercase;
+    font-family: monospace;
     font-size: 12px;
-    color: #0f0;
-    margin-bottom: 2px;
     text-shadow:
       -1px -1px 0 #000,
       1px -1px 0 #000,
       -1px 1px 0 #000,
       1px 1px 0 #000;
+    width: 80px;
+    user-select: none;
+    cursor: pointer;
   }
-  .custom-marker .dot {
-    width: 12px;
-    height: 12px;
-    border-radius: 50%;
+  .custom-marker .callsign-label {
+    margin-bottom: 4px;
+  }
+  .custom-marker .info-label {
+    font-size: 10px;
+    font-weight: normal;
+    margin-top: 2px;
+    color: #0f0;
+    line-height: 1.1em;
+    white-space: nowrap;
+  }
+  .custom-marker .plane-icon {
+    display: inline-block;
+    width: 24px;
+    height: 24px;
     margin: 0 auto;
-  }
-  .custom-marker.normal .dot {
-    background-color: #0099ff; /* bleu normal */
+    transition: transform 0.5s ease;
+    filter: drop-shadow(0 0 1px black);
+    fill: #0099ff;
     animation: none;
   }
-  .custom-marker.emergency .dot {
-    background-color: orange;
+  .custom-marker.emergency .plane-icon {
+    fill: orange;
     animation: blink 1s infinite;
   }
-  .custom-marker.stopped .dot {
-    background-color: red;
+  .custom-marker.stopped .plane-icon {
+    fill: red;
     animation: none;
   }
   @keyframes blink {
     0%, 50%, 100% { opacity: 1; }
     25%, 75% { opacity: 0; }
   }
+
+  /* Bouton urgence */
   .emergency-btn {
     margin-top: 4px;
-    background: #b35200;
-    border: none;
-    color: white;
+    background: black;
+    color: orange;
     font-weight: bold;
-    font-size: 11px;
+    border: 2px solid orange;
+    border-radius: 4px;
     padding: 2px 6px;
+    font-size: 11px;
     cursor: pointer;
-    border-radius: 3px;
     user-select: none;
   }
-  .emergency-btn:disabled {
-    background: #555;
-    cursor: not-allowed;
+  .emergency-btn:hover {
+    background: orange;
+    color: black;
   }
 </style>
+
 </head>
 <body>
-
 <div id="map"></div>
 
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-database-compat.js"></script>
+<!-- Leaflet JS -->
+<script
+  src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+  integrity="sha256-oI0NDWvKA0Jh6zsxS0h5Bp0ZV+PAw7vChWf1o2m9y24="
+  crossorigin=""
+></script>
+
+<!-- Firebase -->
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
 
 <script>
-// Config Firebase
-const firebaseConfig = {
-  apiKey: "AIzaSyABEP_KAW9R4dYpnDS9BANn6vcQCICxzrU",
-  authDomain: "kenzomc-ad1c2.firebaseapp.com",
-  databaseURL: "https://kenzomc-ad1c2-default-rtdb.firebaseio.com",
-  projectId: "kenzomc-ad1c2",
-  storageBucket: "kenzomc-ad1c2.firebasestorage.app",
-  messagingSenderId: "459457032331",
-  appId: "1:459457032331:web:af7e0d8c958a807ce2648e",
-  measurementId: "G-341YD1GPC5"
-};
-firebase.initializeApp(firebaseConfig);
-const db = firebase.database();
+  // Firebase config
+  const firebaseConfig = {
+    apiKey: "AIzaSyABEP_KAW9R4dYpnDS9BANn6vcQCICxzrU",
+    authDomain: "kenzomc-ad1c2.firebaseapp.com",
+    databaseURL: "https://kenzomc-ad1c2-default-rtdb.firebaseio.com",
+    projectId: "kenzomc-ad1c2",
+    storageBucket: "kenzomc-ad1c2.firebasestorage.app",
+    messagingSenderId: "459457032331",
+    appId: "1:459457032331:web:af7e0d8c958a807ce2648e",
+    measurementId: "G-341YD1GPC5"
+  };
 
-const map = L.map('map').setView([48.8566, 2.3522], 12);
+  firebase.initializeApp(firebaseConfig);
+  const db = firebase.database();
 
-L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
-  attribution: '&copy; OpenStreetMap contributors &copy; CARTO',
-  maxZoom: 19
-}).addTo(map);
+  // Carte Leaflet
+  const map = L.map('map').setView([48.8566, 2.3522], 12); // Paris par défaut
 
-const markers = {};
-const MAX_AGE_MS = 30000;
-
-let selectedCallsign = null;
-
-function createMarkerIcon(callsign, stopped, emergency) {
-  let classes = 'custom-marker';
-  if (stopped) classes += ' stopped';
-  else if (emergency) classes += ' emergency';
-  else classes += ' normal';
-
-  return L.divIcon({
-    className: classes,
-    html: `
-      <div class="callsign-label">${callsign}</div>
-      <div class="dot"></div>
-      <button class="emergency-btn" style="display:none;">SIGNAL D’URGENCE</button>
-    `,
-    iconSize: [50, 50],
-    iconAnchor: [25, 25]
-  });
-}
-
-function updateMarker(callsign, lat, lon, stopped = false, emergency = false) {
-  let marker = markers[callsign];
-  if (!marker) {
-    const icon = createMarkerIcon(callsign, stopped, emergency);
-    marker = L.marker([lat, lon], { icon }).addTo(map);
-    markers[callsign] = marker;
-
-    marker.on('click', () => {
-      if (selectedCallsign && selectedCallsign !== callsign) {
-        hideEmergencyButton(selectedCallsign);
-      }
-      selectedCallsign = callsign;
-      toggleEmergencyButton(marker, callsign, stopped);
-    });
-  } else {
-    marker.setLatLng([lat, lon]);
-    const icon = createMarkerIcon(callsign, stopped, emergency);
-    marker.setIcon(icon);
-  }
-}
-
-function hideEmergencyButton(callsign) {
-  const marker = markers[callsign];
-  if (!marker) return;
-  const el = marker.getElement();
-  if (!el) return;
-  const btn = el.querySelector('.emergency-btn');
-  if (btn) {
-    btn.style.display = 'none';
-    btn.onclick = null;
-  }
-}
-
-function toggleEmergencyButton(marker, callsign, stopped) {
-  const el = marker.getElement();
-  if (!el) return;
-  const btn = el.querySelector('.emergency-btn');
-  if (!btn) return;
-
-  if (btn.style.display === 'none' || btn.style.display === '') {
-    btn.style.display = 'inline-block';
-
-    if (stopped) {
-      btn.textContent = 'PARTAGE ARRÊTÉ';
-      btn.disabled = true;
-      btn.style.background = '#555';
-      btn.onclick = null;
-      return;
-    } else {
-      btn.disabled = false;
-      btn.style.background = '#b35200';
+  // Style ATC noir & blanc
+  L.tileLayer(
+    'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
+    {
+      maxZoom: 19,
+      attribution: '&copy; <a href="https://carto.com/">CARTO</a>'
     }
+  ).addTo(map);
 
-    db.ref('positions/' + callsign + '/emergency').get().then(snap => {
-      const isEmergency = snap.exists() && snap.val() === true;
-      btn.textContent = isEmergency ? 'Désactiver URGENCE' : 'SIGNAL D’URGENCE';
+  const markers = {};
+  let selectedCallsign = null;
 
-      btn.onclick = () => {
-        const newState = !isEmergency;
-        db.ref('positions/' + callsign).update({ emergency: newState });
-        btn.textContent = newState ? 'Désactiver URGENCE' : 'SIGNAL D’URGENCE';
-        updateMarker(callsign, marker.getLatLng().lat, marker.getLatLng().lng, stopped, newState);
-      };
+  // Création d'une icône avion SVG avec rotation, altitude, vitesse
+  function createMarkerIcon(callsign, stopped, emergency, heading=0, altitude=null, speed=null) {
+    let classes = 'custom-marker';
+    if (stopped) classes += ' stopped';
+    else if (emergency) classes += ' emergency';
+    else classes += ' normal';
+
+    let altText = altitude !== null ? `ALT: ${Math.round(altitude)}m` : '';
+    let speedText = speed !== null ? `SPD: ${Math.round(speed)}km/h` : '';
+
+    return L.divIcon({
+      className: classes,
+      html: `
+        <div class="callsign-label">${callsign}</div>
+        <svg class="plane-icon" viewBox="0 0 64 64" style="transform: rotate(${heading}deg);" xmlns="http://www.w3.org/2000/svg" >
+          <path d="M32 2 L36 22 L54 24 L38 34 L42 54 L32 42 L22 54 L26 34 L10 24 L28 22 Z"/>
+        </svg>
+        <div class="info-label">${altText}<br>${speedText}</div>
+        <button class="emergency-btn" style="display:none;">SIGNAL D’URGENCE</button>
+      `,
+      iconSize: [80, 80],
+      iconAnchor: [40, 40],
+      popupAnchor: [0, -40]
     });
-  } else {
+  }
+
+  // Afficher / cacher bouton urgence
+  function toggleEmergencyButton(marker, callsign, stopped) {
+    const el = marker.getElement();
+    if (!el) return;
+    const btn = el.querySelector('.emergency-btn');
+    if (!btn) return;
+
+    if (btn.style.display === 'none' && !stopped) {
+      btn.style.display = 'inline-block';
+      btn.onclick = () => {
+        const ref = db.ref('positions/' + callsign);
+        ref.get().then(snapshot => {
+          const val = snapshot.val();
+          const newEmergency = !(val && val.emergency);
+          ref.update({ emergency: newEmergency });
+        });
+      };
+    } else {
+      btn.style.display = 'none';
+      btn.onclick = null;
+    }
+  }
+  function hideEmergencyButton(callsign) {
+    const marker = markers[callsign];
+    if (!marker) return;
+    const el = marker.getElement();
+    if (!el) return;
+    const btn = el.querySelector('.emergency-btn');
+    if (!btn) return;
     btn.style.display = 'none';
     btn.onclick = null;
   }
-}
 
-function removeMarker(callsign) {
-  const marker = markers[callsign];
-  if (marker) {
-    map.removeLayer(marker);
-    delete markers[callsign];
-    if (selectedCallsign === callsign) selectedCallsign = null;
+  // Ajouter ou mettre à jour marker
+  function updateMarker(callsign, lat, lon, stopped=false, emergency=false, heading=0, altitude=null, speed=null) {
+    let marker = markers[callsign];
+    if (!marker) {
+      const icon = createMarkerIcon(callsign, stopped, emergency, heading, altitude, speed);
+      marker = L.marker([lat, lon], { icon }).addTo(map);
+      markers[callsign] = marker;
+
+      marker.on('click', () => {
+        if (selectedCallsign && selectedCallsign !== callsign) {
+          hideEmergencyButton(selectedCallsign);
+        }
+        selectedCallsign = callsign;
+        toggleEmergencyButton(marker, callsign, stopped);
+      });
+    } else {
+      marker.setLatLng([lat, lon]);
+      const icon = createMarkerIcon(callsign, stopped, emergency, heading, altitude, speed);
+      marker.setIcon(icon);
+    }
   }
-}
 
-function fetchPositions() {
-  db.ref('positions').once('value').then(snapshot => {
+  // Supprimer marker
+  function removeMarker(callsign) {
+    if (markers[callsign]) {
+      map.removeLayer(markers[callsign]);
+      delete markers[callsign];
+    }
+  }
+
+  // Écoute Firebase en temps réel
+  const MAX_AGE_MS = 10000; // 10s avant suppression
+  db.ref('positions').on('value', snapshot => {
     const data = snapshot.val() || {};
     const now = Date.now();
 
-    const callsigns = Object.keys(data);
-    const toRemove = Object.keys(markers).filter(c => !callsigns.includes(c));
-    toRemove.forEach(removeMarker);
+    // Marqueurs à garder
+    const activeCallsigns = [];
 
     for (const callsign in data) {
       const pos = data[callsign];
-      if (pos.lastUpdate && (now - pos.lastUpdate <= MAX_AGE_MS || pos.stopped)) {
-        // Important: on passe bien les valeurs telles quelles, on n'écrase pas emergency si stopped.
-        updateMarker(callsign, pos.lat, pos.lon, pos.stopped || false, pos.emergency || false);
+      if (!pos.lastUpdate) continue;
+      const age = now - pos.lastUpdate;
+
+      if (age <= MAX_AGE_MS || pos.stopped) {
+        updateMarker(
+          callsign,
+          pos.lat,
+          pos.lon,
+          pos.stopped || false,
+          pos.emergency || false,
+          pos.heading || 0,
+          pos.altitude || null,
+          pos.speed || null
+        );
+        activeCallsigns.push(callsign);
       } else {
         removeMarker(callsign);
       }
     }
+
+    // Supprimer les markers obsolètes
+    for (const callsign in markers) {
+      if (!activeCallsigns.includes(callsign)) {
+        removeMarker(callsign);
+      }
+    }
   });
-}
 
-fetchPositions();
-setInterval(fetchPositions, 1000);
 </script>
-
 </body>
 </html>
