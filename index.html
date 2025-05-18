@@ -127,22 +127,18 @@
   firebase.initializeApp(firebaseConfig);
   const db = firebase.database();
 
-  // Carte Leaflet
-  const map = L.map('map').setView([48.8566, 2.3522], 12); // Paris par défaut
+  // Carte Leaflet centrée sur Paris (modifiable)
+  const map = L.map('map').setView([48.8566, 2.3522], 12);
 
-  // Style ATC noir & blanc
-  L.tileLayer(
-    'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
-    {
-      maxZoom: 19,
-      attribution: '&copy; <a href="https://carto.com/">CARTO</a>'
-    }
-  ).addTo(map);
+  // Carte style ATC sombre - Stadia Maps Alidade Dark
+  L.tileLayer('https://tiles.stadiamaps.com/tiles/alidade_dark/{z}/{x}/{y}{r}.png', {
+    maxZoom: 20,
+    attribution: '&copy; Stadia Maps, &copy; OpenMapTiles &copy; OpenStreetMap contributors'
+  }).addTo(map);
 
   const markers = {};
   let selectedCallsign = null;
 
-  // Création d'une icône avion SVG avec rotation, altitude, vitesse
   function createMarkerIcon(callsign, stopped, emergency, heading=0, altitude=null, speed=null) {
     let classes = 'custom-marker';
     if (stopped) classes += ' stopped';
@@ -168,7 +164,6 @@
     });
   }
 
-  // Afficher / cacher bouton urgence
   function toggleEmergencyButton(marker, callsign, stopped) {
     const el = marker.getElement();
     if (!el) return;
@@ -201,7 +196,6 @@
     btn.onclick = null;
   }
 
-  // Ajouter ou mettre à jour marker
   function updateMarker(callsign, lat, lon, stopped=false, emergency=false, heading=0, altitude=null, speed=null) {
     let marker = markers[callsign];
     if (!marker) {
@@ -223,7 +217,6 @@
     }
   }
 
-  // Supprimer marker
   function removeMarker(callsign) {
     if (markers[callsign]) {
       map.removeLayer(markers[callsign]);
@@ -231,13 +224,12 @@
     }
   }
 
-  // Écoute Firebase en temps réel
+  // Rafraîchissement Firebase temps réel
   const MAX_AGE_MS = 10000; // 10s avant suppression
   db.ref('positions').on('value', snapshot => {
     const data = snapshot.val() || {};
     const now = Date.now();
 
-    // Marqueurs à garder
     const activeCallsigns = [];
 
     for (const callsign in data) {
@@ -262,7 +254,6 @@
       }
     }
 
-    // Supprimer les markers obsolètes
     for (const callsign in markers) {
       if (!activeCallsigns.includes(callsign)) {
         removeMarker(callsign);
