@@ -48,6 +48,10 @@
     background-color: orange;
     animation: blink 1s infinite;
   }
+  .custom-marker.stopped .dot {
+    background-color: red;
+    animation: none;
+  }
   @keyframes blink {
     0%, 50%, 100% { opacity: 1; }
     25%, 75% { opacity: 0; }
@@ -65,6 +69,10 @@
     border-radius: 3px;
     user-select: none;
   }
+  .emergency-btn:disabled {
+    background: #555;
+    cursor: not-allowed;
+  }
 </style>
 </head>
 <body>
@@ -76,7 +84,7 @@
 <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-database-compat.js"></script>
 
 <script>
-// Config Firebase (ta config)
+// Config Firebase
 const firebaseConfig = {
   apiKey: "AIzaSyABEP_KAW9R4dYpnDS9BANn6vcQCICxzrU",
   authDomain: "kenzomc-ad1c2.firebaseapp.com",
@@ -101,12 +109,14 @@ L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
 const markers = {};
 const MAX_AGE_MS = 30000; // 30s max avant suppression
 
-// Stocke le callsign du marker sélectionné (clic)
 let selectedCallsign = null;
 
-function createMarkerIcon(callsign, emergency = false) {
+function createMarkerIcon(callsign, emergency = false, stopped = false) {
+  let classes = 'custom-marker';
+  if (emergency) classes += ' emergency';
+  if (stopped) classes += ' stopped';
   return L.divIcon({
-    className: 'custom-marker' + (emergency ? ' emergency' : ''),
+    className: classes,
     html: `
       <div class="callsign-label">${callsign}</div>
       <div class="dot"></div>
@@ -118,12 +128,12 @@ function createMarkerIcon(callsign, emergency = false) {
 }
 
 function updateMarker(callsign, lat, lon, stopped = false, emergency = false) {
-  // Si stopped true, forcer emergency false côté affichage (ne jamais afficher urgence si stopped)
+  // Si stopped true, on force emergency à false côté affichage
   if (stopped) emergency = false;
 
   let marker = markers[callsign];
   if (!marker) {
-    const icon = createMarkerIcon(callsign, emergency);
+    const icon = createMarkerIcon(callsign, emergency, stopped);
     marker = L.marker([lat, lon], { icon }).addTo(map);
     markers[callsign] = marker;
 
@@ -136,8 +146,20 @@ function updateMarker(callsign, lat, lon, stopped = false, emergency = false) {
     });
   } else {
     marker.setLatLng([lat, lon]);
-    const icon = createMarkerIcon(callsign, emergency);
+    const icon = createMarkerIcon(callsign, emergency, stopped);
     marker.setIcon(icon);
+  }
+}
+
+function hideEmergencyButton(callsign) {
+  const marker = markers[callsign];
+  if (!marker) return;
+  const el = marker.getElement();
+  if (!el) return;
+  const btn = el.querySelector('.emergency-btn');
+  if (btn) {
+    btn.style.display = 'none';
+    btn.onclick = null;
   }
 }
 
@@ -150,7 +172,6 @@ function toggleEmergencyButton(marker, callsign, stopped) {
   if (btn.style.display === 'none' || btn.style.display === '') {
     btn.style.display = 'inline-block';
 
-    // Si stopped, on disable le bouton d'urgence (on peut pas l'activer)
     if (stopped) {
       btn.textContent = 'PARTAGE ARRÊTÉ';
       btn.disabled = true;
@@ -179,6 +200,15 @@ function toggleEmergencyButton(marker, callsign, stopped) {
   }
 }
 
+function removeMarker(callsign) {
+  const marker = markers[callsign];
+  if (marker) {
+    map.removeLayer(marker);
+    delete markers[callsign];
+    if (selectedCallsign === callsign) selectedCallsign = null;
+  }
+}
+
 function fetchPositions() {
   db.ref('positions').once('value').then(snapshot => {
     const data = snapshot.val() || {};
@@ -190,9 +220,7 @@ function fetchPositions() {
 
     for (const callsign in data) {
       const pos = data[callsign];
-      // Si plus de 30s et pas stopped, on supprime
       if (pos.lastUpdate && (now - pos.lastUpdate <= MAX_AGE_MS || pos.stopped)) {
-        // Forcer emergency false si stopped dans l'affichage
         updateMarker(callsign, pos.lat, pos.lon, pos.stopped || false, pos.emergency || false);
       } else {
         removeMarker(callsign);
@@ -201,11 +229,7 @@ function fetchPositions() {
   });
 }
 
-
-// Appel initial
 fetchPositions();
-
-// Actualisation toutes les secondes
 setInterval(fetchPositions, 1000);
 </script>
 
