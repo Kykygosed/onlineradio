@@ -28,19 +28,16 @@
       color: black;
       cursor: pointer;
     }
-    #gpwsAlert {
-      display: none;
-      font-weight: bold;
-      font-size: 1.2em;
-      padding: 10px;
-      border: 2px solid red;
-      color: red;
-      text-align: center;
-      width: 90vw;
-      max-width: 400px;
-      margin-top: 10px;
-      animation: blink 1s infinite alternate;
-    }
+#gpwsAlert {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 90vw;
+  max-width: 400px;
+  margin-top: 10px;
+  gap: 5px;
+}
+
     @keyframes blink {
       0% {opacity: 1;}
       100% {opacity: 0.3;}
@@ -116,13 +113,23 @@ window.addEventListener("deviceorientation", event => {
       }
     }
 
-    function showAlert(message) {
-      gpwsAlert.textContent = message;
-      gpwsAlert.style.display = "block";
-      setTimeout(() => {
-        gpwsAlert.style.display = "none";
-      }, 5000);
-    }
+function showAlert(message) {
+  const div = document.createElement("div");
+  div.textContent = message;
+  div.style.border = "2px solid red";
+  div.style.padding = "10px";
+  div.style.marginTop = "5px";
+  div.style.animation = "blink 1s infinite alternate";
+  div.style.color = "red";
+  div.style.textAlign = "center";
+  div.style.fontWeight = "bold";
+  gpwsAlert.appendChild(div);
+
+  setTimeout(() => {
+    gpwsAlert.removeChild(div);
+  }, 5000);
+}
+
 
     // Simulation pitch (à ajuster si tu as la donnée)
     // Ici on fixe pitch = 15° quand speed < 120 pour test stall
@@ -250,7 +257,6 @@ window.addEventListener("deviceorientation", event => {
       });
 
       startBtn.style.display = "inline-block";
-      stopBtn.style.display = "none";
 
       // Supprime l'écoute Firebase
       db.ref("positions/" + callsign).off();
