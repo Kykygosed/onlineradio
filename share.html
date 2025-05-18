@@ -63,12 +63,11 @@ function sendPosition(position) {
   // Tu peux ajouter ici une fonction pour filtrer la zone géographique
 
   db.ref('positions/' + callsign).set({
-    lat: lat,
-    lon: lon,
-    timestamp: Date.now()
-  }).catch(err => {
-    statusDiv.textContent = 'Erreur en envoyant la position : ' + err;
-  });
+  lat: latitude,
+  lon: longitude,
+  lastUpdate: Date.now()
+});
+
   statusDiv.textContent = `Position envoyée : ${lat.toFixed(5)}, ${lon.toFixed(5)}`;
 }
 
