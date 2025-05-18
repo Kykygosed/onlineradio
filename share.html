@@ -31,10 +31,16 @@
   button {
     cursor: pointer;
     font-weight: bold;
+    width: 200px;
   }
   #status {
     margin-top: 20px;
     font-size: 1em;
+  }
+  #btn-stop {
+    background-color: #800000;
+    border-color: #f00;
+    color: #f00;
   }
 </style>
 </head>
@@ -43,7 +49,9 @@
 <h1>Partager ma position</h1>
 <label for="callsign">CALLSIGN :</label>
 <input type="text" id="callsign" maxlength="10" placeholder="EX: KENZO" autocomplete="off" />
+
 <button id="btn-start">Démarrer le partage</button>
+<button id="btn-stop" disabled>Arrêter le partage</button>
 
 <div id="status"></div>
 
@@ -67,9 +75,11 @@ firebase.initializeApp(firebaseConfig);
 const db = firebase.database();
 
 let watchId = null;
+let currentCallsign = null;
 
 const statusDiv = document.getElementById('status');
 const btnStart = document.getElementById('btn-start');
+const btnStop = document.getElementById('btn-stop');
 
 btnStart.addEventListener('click', () => {
   const callsignInput = document.getElementById('callsign');
@@ -90,14 +100,15 @@ btnStart.addEventListener('click', () => {
     return;
   }
 
+  currentCallsign = callsign;
+
   statusDiv.textContent = 'Démarrage du partage...';
 
   watchId = navigator.geolocation.watchPosition(position => {
     const lat = position.coords.latitude;
     const lon = position.coords.longitude;
 
-    // Envoie vers Firebase avec lastUpdate
-    db.ref('positions/' + callsign).set({
+    db.ref('positions/' + currentCallsign).set({
       lat,
       lon,
       lastUpdate: Date.now()
@@ -111,6 +122,29 @@ btnStart.addEventListener('click', () => {
     maximumAge: 1000,
     timeout: 10000
   });
+
+  btnStart.disabled = true;
+  btnStop.disabled = false;
+  callsignInput.disabled = true;
+});
+
+btnStop.addEventListener('click', () => {
+  if (watchId !== null) {
+    navigator.geolocation.clearWatch(watchId);
+    watchId = null;
+
+    // Supprime la position dans Firebase
+    if (currentCallsign) {
+      db.ref('positions/' + currentCallsign).remove();
+    }
+
+    statusDiv.textContent = 'Partage arrêté.';
+    currentCallsign = null;
+
+    btnStart.disabled = false;
+    btnStop.disabled = true;
+    document.getElementById('callsign').disabled = false;
+  }
 });
 </script>
 
