@@ -3,22 +3,47 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Partager ma position</title>
+<title>Partager Position - Radar ATC</title>
+
 <style>
-  body { font-family: Arial, sans-serif; padding: 20px; background: #f0f0f0; }
-  label, input, button { display: block; margin: 10px 0; font-size: 16px; }
-  input { padding: 8px; width: 200px; }
-  button { padding: 10px 20px; background: #007bff; color: white; border: none; border-radius: 5px; cursor: pointer; }
-  #status { margin-top: 20px; font-weight: bold; }
+  body {
+    background: black;
+    color: #0f0;
+    font-family: monospace;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100vh;
+    margin: 0;
+    user-select: none;
+  }
+  label, input, button {
+    font-size: 1.2em;
+    margin: 10px 0;
+    color: #0f0;
+    background: black;
+    border: 1px solid #0f0;
+    padding: 8px;
+    font-family: monospace;
+    text-transform: uppercase;
+  }
+  button {
+    cursor: pointer;
+    font-weight: bold;
+  }
+  #status {
+    margin-top: 20px;
+    font-size: 1em;
+  }
 </style>
 </head>
 <body>
 
 <h1>Partager ma position</h1>
-<label for="callsign">Ton callsign :</label>
-<input type="text" id="callsign" placeholder="Ex: KENZO" />
-
-<button id="toggleTracking">Activer partage position</button>
+<label for="callsign">CALLSIGN :</label>
+<input type="text" id="callsign" maxlength="10" placeholder="EX: KENZO" autocomplete="off" />
+<button id="btn-start">Démarrer le partage</button>
 
 <div id="status"></div>
 
@@ -26,8 +51,7 @@
 <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-database-compat.js"></script>
 
 <script>
-// TODO: Remplace cette config par ta config Firebase !
-// For Firebase JS SDK v7.20.0 and later, measurementId is optional
+// Config Firebase
 const firebaseConfig = {
   apiKey: "AIzaSyABEP_KAW9R4dYpnDS9BANn6vcQCICxzrU",
   authDomain: "kenzomc-ad1c2.firebaseapp.com",
@@ -43,71 +67,50 @@ firebase.initializeApp(firebaseConfig);
 const db = firebase.database();
 
 let watchId = null;
-let isSharing = false;
 
-const btn = document.getElementById('toggleTracking');
-const callsignInput = document.getElementById('callsign');
 const statusDiv = document.getElementById('status');
+const btnStart = document.getElementById('btn-start');
 
-function sendPosition(position) {
-  const callsign = callsignInput.value.trim();
+btnStart.addEventListener('click', () => {
+  const callsignInput = document.getElementById('callsign');
+  const callsign = callsignInput.value.trim().toUpperCase();
+
   if (!callsign) {
-    statusDiv.textContent = 'Merci d\'entrer un callsign avant de partager.';
-    stopSharing();
+    alert('Merci de saisir un callsign');
     return;
   }
 
-  const lat = position.coords.latitude;
-  const lon = position.coords.longitude;
-
-  // Tu peux ajouter ici une fonction pour filtrer la zone géographique
-
-  db.ref('positions/' + callsign).set({
-  lat: latitude,
-  lon: longitude,
-  lastUpdate: Date.now()
-});
-
-  statusDiv.textContent = `Position envoyée : ${lat.toFixed(5)}, ${lon.toFixed(5)}`;
-}
-
-function startSharing() {
   if (!navigator.geolocation) {
-    statusDiv.textContent = 'Géolocalisation non supportée par ton navigateur.';
+    alert('Géolocalisation non supportée par ce navigateur');
     return;
   }
 
-  watchId = navigator.geolocation.watchPosition(sendPosition, (err) => {
-    statusDiv.textContent = 'Erreur géolocalisation : ' + err.message;
+  if (watchId !== null) {
+    alert('Le partage est déjà actif');
+    return;
+  }
+
+  statusDiv.textContent = 'Démarrage du partage...';
+
+  watchId = navigator.geolocation.watchPosition(position => {
+    const lat = position.coords.latitude;
+    const lon = position.coords.longitude;
+
+    // Envoie vers Firebase avec lastUpdate
+    db.ref('positions/' + callsign).set({
+      lat,
+      lon,
+      lastUpdate: Date.now()
+    });
+
+    statusDiv.textContent = `Position envoyée : ${lat.toFixed(5)}, ${lon.toFixed(5)}`;
+  }, error => {
+    statusDiv.textContent = `Erreur géolocalisation : ${error.message}`;
   }, {
     enableHighAccuracy: true,
-    maximumAge: 10000,
+    maximumAge: 1000,
     timeout: 10000
   });
-
-  btn.textContent = 'Désactiver partage position';
-  isSharing = true;
-}
-
-function stopSharing() {
-  if (watchId !== null) {
-    navigator.geolocation.clearWatch(watchId);
-    watchId = null;
-  }
-  if (callsignInput.value.trim()) {
-    db.ref('positions/' + callsignInput.value.trim()).remove();
-  }
-  btn.textContent = 'Activer partage position';
-  statusDiv.textContent = 'Partage désactivé.';
-  isSharing = false;
-}
-
-btn.addEventListener('click', () => {
-  if (isSharing) {
-    stopSharing();
-  } else {
-    startSharing();
-  }
 });
 </script>
 
