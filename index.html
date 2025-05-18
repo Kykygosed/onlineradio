@@ -124,9 +124,10 @@
     }).addTo(map);
 
     const aircrafts = {};
-    const audio = new Audio("https://files.catbox.moe/8sf0qz.mp3"); // fallback MP3 for alarm
+    const audio = new Audio("https://files.catbox.moe/8sf0qz.mp3");
     audio.loop = true;
     let selectedCallsign = null;
+    const emergencyIntervals = {}; // pour conserver les intervalles de ping
 
     function showTransponder(callsign) {
       const pad = document.getElementById('transponder');
@@ -150,6 +151,18 @@
               emergency,
               transponder: input
             });
+
+            if (emergency) {
+              if (emergencyIntervals[callsign]) clearInterval(emergencyIntervals[callsign]);
+              emergencyIntervals[callsign] = setInterval(() => {
+                db.ref(`positions/${callsign}`).update({ emergency: true });
+              }, 1000);
+            } else {
+              if (emergencyIntervals[callsign]) {
+                clearInterval(emergencyIntervals[callsign]);
+                delete emergencyIntervals[callsign];
+              }
+            }
             pad.style.display = 'none';
           }
         };
